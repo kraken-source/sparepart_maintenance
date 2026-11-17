@@ -3,17 +3,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, validationErrors } from '../api'
 import { toNumberOrNull } from '../format'
 import { Field, FormFooter, Modal } from './ui'
+import { BUILTIN_MODELS, builtinValue, resolveModel } from './models'
 
 export default function VehicleForm({ vehicle, onClose }) {
   const qc = useQueryClient()
   const isEdit = !!vehicle?.id
+  const current = resolveModel(vehicle?.model_3d_url)
   const [form, setForm] = useState({
     plate_number: vehicle?.plate_number ?? '',
     brand: vehicle?.brand ?? '',
     model: vehicle?.model ?? '',
     year: vehicle?.year ?? '',
     odometer: vehicle?.odometer ?? '',
-    model_3d_url: vehicle?.model_3d_url ?? '',
+    model_choice: current.kind === 'glb' ? 'glb' : current.key, // key model bawaan atau 'glb'
+    glb_url: current.kind === 'glb' ? current.url : '',
   })
   const [errors, setErrors] = useState({})
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -37,11 +40,12 @@ export default function VehicleForm({ vehicle, onClose }) {
   const submit = (e) => {
     e.preventDefault()
     setErrors({})
+    const { model_choice, glb_url, ...rest } = form
     save.mutate({
-      ...form,
+      ...rest,
       year: toNumberOrNull(form.year),
       odometer: toNumberOrNull(form.odometer),
-      model_3d_url: form.model_3d_url.trim() || null,
+      model_3d_url: model_choice === 'glb' ? glb_url.trim() || null : builtinValue(model_choice),
     })
   }
 
@@ -80,14 +84,24 @@ export default function VehicleForm({ vehicle, onClose }) {
         >
           <input type="number" min="0" value={form.odometer} onChange={set('odometer')} />
         </Field>
-        <Field
-          label="URL model 3D (.glb)"
-          error={errors.model_3d_url}
-          hint="Kosongkan untuk memakai model bawaan. Contoh: /models/palisade.glb"
-        >
-          <input value={form.model_3d_url} onChange={set('model_3d_url')} placeholder="/models/palisade.glb" />
+        <Field label="Model 3D" error={form.model_choice === 'glb' ? null : errors.model_3d_url}>
+          <select value={form.model_choice} onChange={set('model_choice')}>
+            {Object.entries(BUILTIN_MODELS).map(([key, m]) => (
+              <option key={key} value={key}>{m.label} (bawaan)</option>
+            ))}
+            <option value="glb">File .glb sendiri…</option>
+          </select>
         </Field>
       </div>
+      {form.model_choice === 'glb' && (
+        <Field
+          label="URL file model 3D (.glb)"
+          error={errors.model_3d_url}
+          hint="Taruh file di frontend/public/models/, mis. /models/mobil-saya.glb. Nama objek part harus sama dengan nama mesh di menu Part."
+        >
+          <input value={form.glb_url} onChange={set('glb_url')} placeholder="/models/mobil-saya.glb" />
+        </Field>
+      )}
     </Modal>
   )
 }

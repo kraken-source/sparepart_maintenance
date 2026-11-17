@@ -1,8 +1,25 @@
 import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import { useUi } from '../store'
-import { ACTIONS, km, rupiah, tanggal } from '../format'
+import { STATUS, useUi } from '../store'
+import { ACTIONS, km, lifeText, remainingText, rupiah, tanggal } from '../format'
+
+/** Sel "Ganti berikutnya": hanya untuk penggantian; yang sudah digantikan catatan baru ditandai. */
+function NextServiceCell({ record }) {
+  const n = record.next_service
+  if (!n) return <span className="muted">-</span>
+  if (record.superseded) return <span className="muted">Sudah diganti</span>
+  if (!n.next_km && !n.next_date) return <span className="muted">Sesuai kondisi</span>
+
+  const st = STATUS[n.status]
+  return (
+    <div className="next-cell" title={`Usia pakai: ${lifeText(n)}${n.source === 'part' ? ' (default part)' : ''}`}>
+      <span className="badge" style={{ background: st.color }}>{st.label}</span>
+      {[n.next_km && km(n.next_km), n.next_date && tanggal(n.next_date)].filter(Boolean).join(' / ')}
+      <div className="muted">{remainingText(n)}</div>
+    </div>
+  )
+}
 
 /** Halaman modul CRUD: daftar seluruh catatan maintenance kendaraan terpilih. */
 export default function RecordsTable({ vehicle }) {
@@ -46,7 +63,7 @@ export default function RecordsTable({ vehicle }) {
         <thead>
           <tr>
             <th>Tanggal</th><th>Part</th><th>Tindakan</th><th>Odometer</th>
-            <th>Merek part</th><th>Bengkel</th><th className="num">Biaya</th><th />
+            <th>Merek part</th><th>Bengkel</th><th className="num">Biaya</th><th>Ganti berikutnya</th><th>Lampiran</th><th />
           </tr>
         </thead>
         <tbody>
@@ -59,6 +76,16 @@ export default function RecordsTable({ vehicle }) {
               <td>{r.part_brand || '-'}</td>
               <td>{r.workshop || '-'}</td>
               <td className="num">{rupiah(r.cost)}</td>
+              <td><NextServiceCell record={r} /></td>
+              <td>
+                {r.attachments?.length > 0 ? (
+                  <button className="link clip" onClick={() => openForm(r)} title="Lihat lampiran">
+                    📎 {r.attachments.length}
+                  </button>
+                ) : (
+                  <span className="muted">-</span>
+                )}
+              </td>
               <td className="row-actions">
                 <button className="link" onClick={() => openForm(r)}>Edit</button>
                 <button
@@ -71,7 +98,7 @@ export default function RecordsTable({ vehicle }) {
             </tr>
           ))}
           {d && d.data.length === 0 && (
-            <tr><td colSpan={8} className="muted center">Belum ada catatan.</td></tr>
+            <tr><td colSpan={10} className="muted center">Belum ada catatan.</td></tr>
           )}
         </tbody>
       </table>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { km } from '../format'
 import VehicleForm from './VehicleForm'
+import { modelLabel } from './models'
 
 /** Halaman modul CRUD: master kendaraan. */
 export default function VehiclesPage({ vehicles, onOpenDashboard }) {
@@ -33,7 +34,7 @@ export default function VehiclesPage({ vehicles, onOpenDashboard }) {
               <td>{v.brand} {v.model}</td>
               <td>{v.year ?? '-'}</td>
               <td className="num">{km(v.odometer)}</td>
-              <td>{v.model_3d_url ? <code>{v.model_3d_url}</code> : <span className="muted">Bawaan</span>}</td>
+              <td title={v.model_3d_url ?? ''}>{modelLabel(v.model_3d_url)}</td>
               <td className="num">{v.maintenance_records_count ?? 0}</td>
               <td className="row-actions">
                 <button className="link" onClick={() => onOpenDashboard(v.id)}>Lihat 3D</button>

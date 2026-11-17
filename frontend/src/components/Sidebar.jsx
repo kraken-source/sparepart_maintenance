@@ -1,0 +1,87 @@
+import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '../api'
+import { useAuth } from '../auth'
+
+/** Ikon garis sederhana (inline SVG, tanpa library). */
+const ICONS = {
+  dashboard: 'M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Zm0 0v18M3 7.5l9 4.5 9-4.5',
+  records: 'M9 4h6m-6 0a2 2 0 0 0-2 2v0H5v15h14V6h-2v0a2 2 0 0 0-2-2M9 4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M8 11h8M8 15h5',
+  vehicles: 'M5 16v3m14-3v3M3 16h18v-4l-2-5H5l-2 5v4Zm0-4h18M7 14h.01M17 14h.01',
+  parts: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm8 3-2.1-.7a6 6 0 0 0-.6-1.5l1-2-1.4-1.4-2 1a6 6 0 0 0-1.5-.6L12.7 4h-1.4l-.7 2.1a6 6 0 0 0-1.5.6l-2-1-1.4 1.4 1 2a6 6 0 0 0-.6 1.5L4 11.3v1.4l2.1.7a6 6 0 0 0 .6 1.5l-1 2 1.4 1.4 2-1a6 6 0 0 0 1.5.6l.7 2.1h1.4l.7-2.1a6 6 0 0 0 1.5-.6l2 1 1.4-1.4-1-2a6 6 0 0 0 .6-1.5L20 12.7Z',
+  logout: 'M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 8l-4 4 4 4M6 12h10',
+}
+
+export function Icon({ name }) {
+  return (
+    <svg className="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={ICONS[name]} />
+    </svg>
+  )
+}
+
+export default function Sidebar({ groups, active, onSelect }) {
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-brand">
+        <span className="logo">SM</span>
+        <span className="label">Sparepart<br />Maintenance</span>
+      </div>
+
+      <nav className="sidebar-nav">
+        {groups.map((g) => (
+          <div key={g.title} className="nav-group">
+            <div className="nav-title label">{g.title}</div>
+            {g.items.map((item) => (
+              <button
+                key={item.key}
+                className={`nav-item ${active === item.key ? 'active' : ''}`}
+                onClick={() => onSelect(item.key)}
+                title={item.label}
+              >
+                <Icon name={item.key} />
+                <span className="label">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      <UserBox />
+    </aside>
+  )
+}
+
+function UserBox() {
+  const user = useAuth((s) => s.user)
+  const setUser = useAuth((s) => s.setUser)
+  const clear = useAuth((s) => s.clear)
+
+  // Setelah refresh halaman hanya token yang tersimpan; ambil data user-nya.
+  const me = useQuery({ queryKey: ['me'], queryFn: api.me, enabled: !user })
+  useEffect(() => {
+    if (me.data) setUser(me.data)
+  }, [me.data, setUser])
+
+  const logout = async () => {
+    try {
+      await api.logout()
+    } finally {
+      clear()
+    }
+  }
+
+  return (
+    <div className="sidebar-user">
+      <span className="avatar" title={user?.email}>{(user?.name ?? '?').charAt(0).toUpperCase()}</span>
+      <span className="label user-name">
+        {user?.name ?? '…'}
+        <small className="muted">{user?.email}</small>
+      </span>
+      <button className="nav-item logout" onClick={logout} title="Keluar">
+        <Icon name="logout" />
+      </button>
+    </div>
+  )
+}

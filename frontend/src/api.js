@@ -1,14 +1,37 @@
 import axios from 'axios'
+import { useAuth } from './auth'
 
 const http = axios.create({ baseURL: '/api', headers: { Accept: 'application/json' } })
 
+// Sisipkan token di setiap request.
+http.interceptors.request.use((config) => {
+  const token = useAuth.getState().token
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+// Token kedaluwarsa / dicabut → kembali ke halaman login.
+http.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401 && useAuth.getState().token) useAuth.getState().clear()
+    return Promise.reject(err)
+  },
+)
+
 export const api = {
+  // --- Auth ---
+  login: (payload) => http.post('/login', payload).then((r) => r.data),
+  me: () => http.get('/me').then((r) => r.data.data),
+  logout: () => http.post('/logout'),
+
   // --- Kendaraan ---
   vehicles: () => http.get('/vehicles').then((r) => r.data.data),
   createVehicle: (payload) => http.post('/vehicles', payload).then((r) => r.data.data),
   updateVehicle: (id, payload) => http.put(`/vehicles/${id}`, payload).then((r) => r.data.data),
   deleteVehicle: (id) => http.delete(`/vehicles/${id}`),
   partsStatus: (vehicleId) => http.get(`/vehicles/${vehicleId}/parts-status`).then((r) => r.data.data),
+  vehicleSummary: (vehicleId) => http.get(`/vehicles/${vehicleId}/summary`).then((r) => r.data.data),
 
   // --- Part ---
   parts: () => http.get('/parts').then((r) => r.data.data),
@@ -21,6 +44,16 @@ export const api = {
   createRecord: (payload) => http.post('/maintenance-records', payload).then((r) => r.data.data),
   updateRecord: (id, payload) => http.put(`/maintenance-records/${id}`, payload).then((r) => r.data.data),
   deleteRecord: (id) => http.delete(`/maintenance-records/${id}`),
+
+  // --- Lampiran (foto nota / bukti servis) ---
+  uploadAttachments: (recordId, files) => {
+    const form = new FormData()
+    files.forEach((f) => form.append('files[]', f))
+    return http.post(`/maintenance-records/${recordId}/attachments`, form).then((r) => r.data.data)
+  },
+  /** File lampiran sebagai Blob (perlu token, jadi tidak bisa langsung dipakai di <img src>). */
+  attachmentBlob: (id) => http.get(`/attachments/${id}`, { responseType: 'blob' }).then((r) => r.data),
+  deleteAttachment: (id) => http.delete(`/attachments/${id}`),
 }
 
 /** Ambil pesan error validasi Laravel (422) menjadi { field: 'pesan' }. */

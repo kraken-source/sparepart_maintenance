@@ -7,14 +7,12 @@ use App\Http\Requests\VehicleRequest;
 use App\Models\MaintenanceRecord;
 use App\Models\Part;
 use App\Models\Vehicle;
+use App\Support\PartLife;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 
 class VehicleController extends Controller
 {
-    /** Ambang "segera": sisa jarak/waktu <= 15% dari interval. */
-    private const DUE_SOON_RATIO = 0.15;
-
     public function index(): JsonResponse
     {
         $vehicles = Vehicle::withCount('maintenanceRecords')
@@ -58,6 +56,26 @@ class VehicleController extends Controller
     }
 
     /**
+     * GET /api/vehicles/{vehicle}/summary
+     * Ringkasan biaya & aktivitas untuk kartu dashboard.
+     */
+    public function summary(Vehicle $vehicle): JsonResponse
+    {
+        $since = Carbon::today()->subMonthsNoOverflow(12);
+        $records = $vehicle->maintenanceRecords();
+
+        return response()->json(['data' => [
+            'cost_12m' => (int) (clone $records)->where('service_date', '>=', $since)->sum('cost'),
+            'records_12m' => (clone $records)->where('service_date', '>=', $since)->count(),
+            'cost_total' => (int) (clone $records)->sum('cost'),
+            'records_total' => (clone $records)->count(),
+            'last_service_date' => (clone $records)->max('service_date')
+                ? Carbon::parse((clone $records)->max('service_date'))->toDateString()
+                : null,
+        ]]);
+    }
+
+    /**
      * GET /api/vehicles/{vehicle}/parts-status
      * Status tiap part untuk kendaraan ini, dipakai untuk mewarnai model 3D.
      */
@@ -80,28 +98,7 @@ class VehicleController extends Controller
 
         $data = Part::orderBy('category')->orderBy('name')->get()->map(function (Part $part) use ($vehicle, $last, $counts, $today) {
             $record = $last->get($part->id);
-            $status = 'unknown';
-            $remainingKm = null;
-            $remainingDays = null;
-            $nextDate = null;
-
-            if ($record) {
-                $ratios = [];
-
-                if ($part->interval_km) {
-                    $remainingKm = $record->odometer + $part->interval_km - $vehicle->odometer;
-                    $ratios[] = $remainingKm / $part->interval_km;
-                }
-                if ($part->interval_days) {
-                    $next = $record->service_date->copy()->addDays($part->interval_days);
-                    $nextDate = $next->toDateString();
-                    $remainingDays = (int) $today->diffInDays($next, false);
-                    $ratios[] = $remainingDays / $part->interval_days;
-                }
-
-                $worst = $ratios ? min($ratios) : 1;
-                $status = $worst <= 0 ? 'overdue' : ($worst <= self::DUE_SOON_RATIO ? 'due_soon' : 'ok');
-            }
+            $life = $record ? PartLife::evaluate($record, $part, $vehicle->odometer, $today) : null;
 
             return [
                 'id' => $part->id,
@@ -110,12 +107,19 @@ class VehicleController extends Controller
                 'mesh_name' => $part->mesh_name,
                 'interval_km' => $part->interval_km,
                 'interval_days' => $part->interval_days,
-                'status' => $status,
+                'status' => $life['status'] ?? 'unknown',
                 'last_service_date' => $record?->service_date?->toDateString(),
                 'last_odometer' => $record?->odometer,
-                'remaining_km' => $remainingKm,
-                'remaining_days' => $remainingDays,
-                'next_service_date' => $nextDate,
+                // Usia pakai yang berlaku: dari catatan terakhir ('record') atau default part ('part')
+                'life_source' => $life['source'] ?? null,
+                'life_km' => $life['life_km'] ?? null,
+                'life_months' => $life['life_months'] ?? null,
+                'life_days' => $life['life_days'] ?? null,
+                'next_km' => $life['next_km'] ?? null,
+                'next_service_date' => $life['next_date'] ?? null,
+                'remaining_km' => $life['remaining_km'] ?? null,
+                'remaining_days' => $life['remaining_days'] ?? null,
+                'used_ratio' => $life['used_ratio'] ?? null,
                 'record_count' => (int) ($counts[$part->id] ?? 0),
             ];
         });

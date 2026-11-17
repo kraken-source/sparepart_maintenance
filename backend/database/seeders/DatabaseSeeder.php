@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\MaintenanceRecord;
 use App\Models\Part;
+use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -12,7 +13,13 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $vehicle = Vehicle::updateOrCreate(
+        // User awal untuk development. firstOrCreate: password tidak di-reset saat seed ulang.
+        User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            ['name' => 'Admin', 'password' => env('SEED_ADMIN_PASSWORD', 'password')],
+        );
+
+        $vehicle = Vehicle::firstOrCreate(
             ['plate_number' => 'B 1234 PLS'],
             [
                 'brand' => 'Hyundai',
@@ -43,7 +50,7 @@ class DatabaseSeeder extends Seeder
 
         $byMesh = [];
         foreach ($parts as [$name, $category, $mesh, $km, $days]) {
-            $byMesh[$mesh] = Part::updateOrCreate(
+            $byMesh[$mesh] = Part::firstOrCreate(
                 ['mesh_name' => $mesh],
                 ['name' => $name, 'category' => $category, 'interval_km' => $km, 'interval_days' => $days],
             );

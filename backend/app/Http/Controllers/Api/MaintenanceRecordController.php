@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\MaintenanceRecordRequest;
 use App\Models\MaintenanceRecord;
 use App\Models\Vehicle;
+use App\Support\PartLife;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,11 +16,18 @@ use Illuminate\Support\Facades\DB;
  */
 class MaintenanceRecordController extends Controller
 {
+    private const RELATIONS = [
+        'part:id,name,category,mesh_name,interval_km,interval_days',
+        'vehicle:id,plate_number,brand,model,odometer',
+        'attachments',
+    ];
+
     /** GET /api/maintenance-records?vehicle_id=&part_id=&q=&per_page= */
     public function index(Request $request): JsonResponse
     {
         $records = MaintenanceRecord::query()
-            ->with(['part:id,name,category,mesh_name', 'vehicle:id,plate_number,brand,model'])
+            ->withSuperseded()
+            ->with(self::RELATIONS)
             ->when($request->integer('vehicle_id'), fn ($q, $id) => $q->where('vehicle_id', $id))
             ->when($request->integer('part_id'), fn ($q, $id) => $q->where('part_id', $id))
             ->when($request->input('mesh_name'), fn ($q, $mesh) => $q->whereHas('part', fn ($p) => $p->where('mesh_name', $mesh)))
@@ -33,7 +41,8 @@ class MaintenanceRecordController extends Controller
             })
             ->orderByDesc('service_date')
             ->orderByDesc('id')
-            ->paginate(min($request->integer('per_page', 15), 100));
+            ->paginate(min($request->integer('per_page', 15), 100))
+            ->through(fn (MaintenanceRecord $r) => $this->withNextService($r));
 
         return response()->json($records);
     }
@@ -41,28 +50,28 @@ class MaintenanceRecordController extends Controller
     public function store(MaintenanceRecordRequest $request): JsonResponse
     {
         $record = DB::transaction(function () use ($request) {
-            $record = MaintenanceRecord::create($request->validated());
+            $record = MaintenanceRecord::create($this->payload($request));
             $this->syncOdometer($record);
 
             return $record;
         });
 
-        return response()->json(['data' => $record->load('part', 'vehicle')], 201);
+        return response()->json(['data' => $this->present($record->id)], 201);
     }
 
     public function show(MaintenanceRecord $maintenanceRecord): JsonResponse
     {
-        return response()->json(['data' => $maintenanceRecord->load('part', 'vehicle')]);
+        return response()->json(['data' => $this->present($maintenanceRecord->id)]);
     }
 
     public function update(MaintenanceRecordRequest $request, MaintenanceRecord $maintenanceRecord): JsonResponse
     {
         DB::transaction(function () use ($request, $maintenanceRecord) {
-            $maintenanceRecord->update($request->validated());
+            $maintenanceRecord->update($this->payload($request));
             $this->syncOdometer($maintenanceRecord);
         });
 
-        return response()->json(['data' => $maintenanceRecord->load('part', 'vehicle')]);
+        return response()->json(['data' => $this->present($maintenanceRecord->id)]);
     }
 
     public function destroy(MaintenanceRecord $maintenanceRecord): JsonResponse
@@ -70,6 +79,35 @@ class MaintenanceRecordController extends Controller
         $maintenanceRecord->delete();
 
         return response()->json(null, 204);
+    }
+
+    /** Usia pakai hanya berlaku untuk penggantian; perbaikan/pengecekan tidak menyimpannya. */
+    private function payload(MaintenanceRecordRequest $request): array
+    {
+        $data = $request->validated();
+        if ($data['action'] !== 'replace') {
+            $data['life_km'] = null;
+            $data['life_months'] = null;
+        }
+
+        return $data;
+    }
+
+    private function present(int $id): MaintenanceRecord
+    {
+        $record = MaintenanceRecord::withSuperseded()->with(self::RELATIONS)->findOrFail($id);
+
+        return $this->withNextService($record);
+    }
+
+    /** Tambahkan jadwal ganti berikutnya (hanya untuk catatan penggantian). */
+    private function withNextService(MaintenanceRecord $record): MaintenanceRecord
+    {
+        $record->setAttribute('next_service', $record->action === 'replace'
+            ? PartLife::evaluate($record, $record->part, $record->vehicle->odometer)
+            : null);
+
+        return $record;
     }
 
     /** Odometer kendaraan ikut naik jika catatan baru punya angka km lebih tinggi. */

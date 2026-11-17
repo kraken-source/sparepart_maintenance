@@ -19,6 +19,9 @@ class MaintenanceRecordRequest extends FormRequest
             'action' => ['required', 'in:replace,repair,inspect'],
             'service_date' => ['required', 'date', 'before_or_equal:today'],
             'odometer' => ['required', 'integer', 'min:0', 'max:9999999'],
+            // Usia pakai part yang dipasang (hanya untuk tindakan "replace")
+            'life_km' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'life_months' => ['nullable', 'integer', 'min:1', 'max:120'],
             'part_brand' => ['nullable', 'string', 'max:80'],
             'cost' => ['nullable', 'integer', 'min:0'],
             'workshop' => ['nullable', 'string', 'max:120'],
@@ -34,6 +37,8 @@ class MaintenanceRecordRequest extends FormRequest
             'action' => 'tindakan',
             'service_date' => 'tanggal servis',
             'odometer' => 'odometer',
+            'life_km' => 'usia pakai (km)',
+            'life_months' => 'usia pakai (bulan)',
             'part_brand' => 'merek part',
             'cost' => 'biaya',
             'workshop' => 'bengkel',

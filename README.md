@@ -32,6 +32,20 @@ npm run dev                         # http://localhost:5173
 
 Vite meneruskan `/api/*` ke `127.0.0.1:8000`, jadi backend harus berjalan lebih dulu.
 
+## Login
+
+Seeder membuat user development `admin@example.com` dengan password `password`
+(bisa diganti lewat `SEED_ADMIN_PASSWORD` di `.env` sebelum seeding).
+
+Tidak ada halaman registrasi. User dibuat atau di-reset password-nya lewat:
+
+```bash
+php artisan user:create "Nama User" email@contoh.com   # password ditanyakan secara interaktif
+```
+
+Autentikasi memakai token Laravel Sanctum (berlaku 7 hari, atur dengan `SANCTUM_EXPIRATION` dalam menit).
+Login dibatasi 5 percobaan per menit per email + IP.
+
 Untuk MySQL, ubah `DB_CONNECTION=mysql` beserta `DB_*` lainnya di `backend/.env`.
 
 ## Model 3D
@@ -49,8 +63,13 @@ Sudut kamera awal bisa diatur lewat URL: `?view=front|side|rear|top`.
 
 ## API
 
+Semua endpoint kecuali `POST /api/login` membutuhkan header `Authorization: Bearer <token>`.
+
 | Method | Endpoint | Keterangan |
 |---|---|---|
+| POST | `/api/login` | `{email, password}` → `{token, user}` |
+| GET | `/api/me` | user yang sedang login |
+| POST | `/api/logout` | cabut token saat ini |
 | GET/POST | `/api/vehicles` | daftar / tambah kendaraan |
 | GET/PUT/DELETE | `/api/vehicles/{id}` | detail / ubah / hapus |
 | GET | `/api/vehicles/{id}/parts-status` | status tiap part (untuk pewarnaan 3D) |
@@ -59,4 +78,3 @@ Sudut kamera awal bisa diatur lewat URL: `?view=front|side|rear|top`.
 | GET/POST | `/api/maintenance-records` | daftar (filter `vehicle_id`, `part_id`, `q`) / tambah |
 | GET/PUT/DELETE | `/api/maintenance-records/{id}` | detail / ubah / hapus |
 
-> API belum memakai autentikasi.
