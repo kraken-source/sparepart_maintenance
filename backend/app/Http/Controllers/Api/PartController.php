@@ -6,15 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PartRequest;
 use App\Models\Part;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * Modul CRUD: master part / sparepart.
  */
 class PartController extends Controller
 {
-    public function index(): JsonResponse
+    /** GET /api/parts?vehicle_type=car|motorcycle */
+    public function index(Request $request): JsonResponse
     {
         $parts = Part::withCount('maintenanceRecords')
+            ->when($request->input('vehicle_type'), fn ($q, $type) => $q->forType($type))
+            ->orderBy('vehicle_type')
             ->orderBy('category')
             ->orderBy('name')
             ->get();

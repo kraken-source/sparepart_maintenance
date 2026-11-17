@@ -24,6 +24,13 @@ export const api = {
   login: (payload) => http.post('/login', payload).then((r) => r.data),
   me: () => http.get('/me').then((r) => r.data.data),
   logout: () => http.post('/logout'),
+  changePassword: (payload) => http.put('/me/password', payload).then((r) => r.data),
+
+  // --- Pengguna (khusus admin) ---
+  users: () => http.get('/users').then((r) => r.data.data),
+  createUser: (payload) => http.post('/users', payload).then((r) => r.data.data),
+  updateUser: (id, payload) => http.put(`/users/${id}`, payload).then((r) => r.data.data),
+  deleteUser: (id) => http.delete(`/users/${id}`),
 
   // --- Kendaraan ---
   vehicles: () => http.get('/vehicles').then((r) => r.data.data),

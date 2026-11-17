@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
-import { useAuth } from '../auth'
+import { ROLES, useAuth } from '../auth'
+import ChangePasswordForm from './users/ChangePasswordForm'
 
 /** Ikon garis sederhana (inline SVG, tanpa library). */
 const ICONS = {
@@ -11,6 +12,8 @@ const ICONS = {
   parts: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm8 3-2.1-.7a6 6 0 0 0-.6-1.5l1-2-1.4-1.4-2 1a6 6 0 0 0-1.5-.6L12.7 4h-1.4l-.7 2.1a6 6 0 0 0-1.5.6l-2-1-1.4 1.4 1 2a6 6 0 0 0-.6 1.5L4 11.3v1.4l2.1.7a6 6 0 0 0 .6 1.5l-1 2 1.4 1.4 2-1a6 6 0 0 0 1.5.6l.7 2.1h1.4l.7-2.1a6 6 0 0 0 1.5-.6l2 1 1.4-1.4-1-2a6 6 0 0 0 .6-1.5L20 12.7Z',
   logout: 'M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 8l-4 4 4 4M6 12h10',
   reports: 'M4 20h16M7 16v-4m5 4V8m5 8v-6',
+  users: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 8v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  key: 'M15 7a2 2 0 0 1 2 2m4 0a6 6 0 0 1-7.7 5.7L11 17H9v2H7v2H3v-3.6l6.3-6.3A6 6 0 1 1 21 9Z',
   sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-14v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z',
   bell:'M6 9a6 6 0 1 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9Zm4.3 11a2 2 0 0 0 3.4 0',
@@ -68,6 +71,8 @@ function UserBox() {
     if (me.data) setUser(me.data)
   }, [me.data, setUser])
 
+  const [changingPassword, setChangingPassword] = useState(false)
+
   const logout = async () => {
     try {
       await api.logout()
@@ -79,13 +84,17 @@ function UserBox() {
   return (
     <div className="sidebar-user">
       <span className="avatar" title={user?.email}>{(user?.name ?? '?').charAt(0).toUpperCase()}</span>
-      <span className="label user-name">
+      <span className="label user-name" title={user?.email}>
         {user?.name ?? '…'}
-        <small className="muted">{user?.email}</small>
+        <small className="muted">{user ? ROLES[user.role] ?? user.role : ''}</small>
       </span>
+      <button className="nav-item logout" onClick={() => setChangingPassword(true)} title="Ganti password">
+        <Icon name="key" />
+      </button>
       <button className="nav-item logout" onClick={logout} title="Keluar">
         <Icon name="logout" />
       </button>
+      {changingPassword && <ChangePasswordForm onClose={() => setChangingPassword(false)} />}
     </div>
   )
 }

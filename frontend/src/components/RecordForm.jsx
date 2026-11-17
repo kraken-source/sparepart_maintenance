@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, errorMessage, validationErrors } from '../api'
 import { useUi } from '../store'
-import { ACTIONS, addMonths, km, tanggal, toNumberOrNull } from '../format'
+import { useIsAdmin } from '../auth'
+import { ACTIONS, addMonths, km, tanggal, toNumberOrNull, vehicleLabel } from '../format'
 import { shrinkImage } from '../image'
 import { Field, FormFooter, Modal } from './ui'
 import { AttachmentThumb, PendingThumb } from './Attachments'
@@ -38,6 +39,7 @@ function addDays(isoDate, days) {
 
 /** Modal tambah / edit catatan maintenance, termasuk lampiran foto nota. */
 export default function RecordForm({ vehicles }) {
+  const isAdmin = useIsAdmin()
   const initial = useUi((s) => s.formRecord)
   const closeForm = useUi((s) => s.closeForm)
   const qc = useQueryClient()
@@ -67,6 +69,18 @@ export default function RecordForm({ vehicles }) {
   const [processing, setProcessing] = useState(false)
   const [errors, setErrors] = useState({})
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  // Part hanya untuk jenis kendaraan yang dipilih (part motor tidak muncul untuk mobil).
+  const typeOf = (vehicleId) => vehicles?.find((v) => v.id === Number(vehicleId))?.type ?? 'car'
+  const typeParts = (parts.data ?? []).filter((p) => p.vehicle_type === typeOf(form.vehicle_id))
+  const changeVehicle = (e) => {
+    const vehicleId = e.target.value
+    setForm((f) => ({
+      ...f,
+      vehicle_id: vehicleId,
+      part_id: typeOf(vehicleId) === typeOf(f.vehicle_id) ? f.part_id : '', // ganti jenis → pilih part lagi
+    }))
+  }
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['records'] })
@@ -172,21 +186,21 @@ export default function RecordForm({ vehicles }) {
           onClose={closeForm}
           saving={save.isPending || processing}
           deleting={remove.isPending}
-          onDelete={isEdit ? () => confirm('Hapus catatan ini beserta lampirannya?') && remove.mutate() : null}
+          onDelete={isEdit && isAdmin ? () => confirm('Hapus catatan ini beserta lampirannya?') && remove.mutate() : null}
         />
       }
     >
       {errors._general && <p className="error">{errors._general}</p>}
       <div className="grid">
         <Field label="Kendaraan" error={errors.vehicle_id}>
-          <select value={form.vehicle_id} onChange={set('vehicle_id')}>
-            {vehicles?.map((v) => <option key={v.id} value={v.id}>{v.plate_number} – {v.brand} {v.model}</option>)}
+          <select value={form.vehicle_id} onChange={changeVehicle}>
+            {vehicles?.map((v) => <option key={v.id} value={v.id}>{vehicleLabel(v, { withOwner: isAdmin })}</option>)}
           </select>
         </Field>
         <Field label="Part" error={errors.part_id}>
           <select value={form.part_id} onChange={set('part_id')}>
             <option value="">— pilih part —</option>
-            {parts.data?.map((p) => <option key={p.id} value={p.id}>{p.category} · {p.name}</option>)}
+            {typeParts.map((p) => <option key={p.id} value={p.id}>{p.category} · {p.name}</option>)}
           </select>
         </Field>
         <Field label="Tindakan" error={errors.action}>

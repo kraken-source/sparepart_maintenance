@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import { STATUS, useUi } from '../store'
+import { useIsAdmin } from '../auth'
 import { ACTIONS, km, lifeText, remainingText, rupiah, tanggal } from '../format'
 
 /** Sel "Ganti berikutnya": hanya untuk penggantian; yang sudah digantikan catatan baru ditandai. */
@@ -23,6 +24,7 @@ function NextServiceCell({ record }) {
 
 /** Halaman modul CRUD: daftar seluruh catatan maintenance kendaraan terpilih. */
 export default function RecordsTable({ vehicle }) {
+  const isAdmin = useIsAdmin()
   const openForm = useUi((s) => s.openForm)
   const qc = useQueryClient()
   const [q, setQ] = useState('')
@@ -90,12 +92,14 @@ export default function RecordsTable({ vehicle }) {
               </td>
               <td className="row-actions">
                 <button className="link" onClick={() => openForm(r)}>Edit</button>
-                <button
-                  className="link danger"
-                  onClick={() => confirm(`Hapus catatan ${r.part?.name} (${tanggal(r.service_date)})?`) && remove.mutate(r.id)}
-                >
-                  Hapus
-                </button>
+                {isAdmin && (
+                  <button
+                    className="link danger"
+                    onClick={() => confirm(`Hapus catatan ${r.part?.name} (${tanggal(r.service_date)})?`) && remove.mutate(r.id)}
+                  >
+                    Hapus
+                  </button>
+                )}
               </td>
             </tr>
           ))}

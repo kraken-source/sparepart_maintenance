@@ -32,21 +32,55 @@ npm run dev                         # http://localhost:5173
 
 Vite meneruskan `/api/*` ke `127.0.0.1:8000`, jadi backend harus berjalan lebih dulu.
 
-## Login
+## Login, peran & pengguna
 
-Seeder membuat user development `admin@example.com` dengan password `password`
-(bisa diganti lewat `SEED_ADMIN_PASSWORD` di `.env` sebelum seeding).
+Seeder membuat admin development `admin@example.com` dengan password `password`
+(ganti lewat `SEED_ADMIN_PASSWORD` di `.env` sebelum seeding). **Ganti password ini sebelum dipakai orang lain.**
 
-Tidak ada halaman registrasi. User dibuat atau di-reset password-nya lewat:
+| Aksi | Admin | User |
+|---|---|---|
+| Lihat kendaraan beserta catatan, laporan & notifikasinya | ✅ semua | ✅ milik sendiri |
+| Tambah/edit/hapus kendaraan | ✅ semua, bisa pindah pemilik | ✅ milik sendiri |
+| Tambah/edit catatan maintenance, upload/hapus foto nota | ✅ | ✅ kendaraan sendiri |
+| Hapus catatan maintenance | ✅ | ❌ |
+| Tambah/edit/hapus master Part | ✅ | ❌ |
+| Kelola pengguna (menu Pengaturan → Pengguna) | ✅ | ❌ |
+| Ganti password sendiri (ikon kunci di sidebar) | ✅ | ✅ |
+
+Aturan pengaman: admin tidak bisa menurunkan peran, menonaktifkan, atau menghapus dirinya sendiri;
+pengguna yang dinonaktifkan atau di-reset password-nya langsung keluar dari semua perangkat.
+
+**Kepemilikan kendaraan:** setiap kendaraan punya satu pemilik. Data kendaraan milik user lain
+dijawab 404 "Data tidak ditemukan" (keberadaannya tidak dibocorkan). Notifikasi pengingat dikirim
+ke pemilik kendaraan dan admin. User yang masih memiliki kendaraan tidak bisa dihapus.
+
+Jalur darurat dari terminal (mis. semua admin lupa password):
 
 ```bash
-php artisan user:create "Nama User" email@contoh.com   # password ditanyakan secara interaktif
+php artisan user:create "Nama" email@contoh.com --admin   # buat admin / reset password + aktifkan kembali
 ```
 
 Autentikasi memakai token Laravel Sanctum (berlaku 7 hari, atur dengan `SANCTUM_EXPIRATION` dalam menit).
 Login dibatasi 5 percobaan per menit per email + IP.
 
-Untuk MySQL, ubah `DB_CONNECTION=mysql` beserta `DB_*` lainnya di `backend/.env`.
+## Automated test
+
+```bash
+# Backend (PHPUnit) – 84 test: usia pakai, API CRUD, lampiran, login, peran & pengguna, kepemilikan, jenis kendaraan,
+# pengingat & anti-spam, laporan biaya, pesan Bahasa Indonesia
+cd backend
+php artisan test
+
+# Frontend (Vitest) – 28 test: format tanggal/angka, skala grafik, pesan error
+cd frontend
+npm test
+```
+
+Test backend selalu memakai database **di memori** (`phpunit.xml`), dan `tests/TestCase.php`
+menghentikan test bila tersambung ke database lain, sehingga data asli tidak pernah tersentuh.
+Upload lampiran di test memakai `Storage::fake()`.
+
+Jalankan kedua perintah di atas sebelum commit.
 
 ## Pengingat jatuh tempo
 
@@ -67,10 +101,23 @@ Jadwal harian membutuhkan scheduler Laravel yang berjalan:
 Anti-spam: notifikasi dibuat saat part baru masuk status *Segera*/*Lewat jadwal*; part yang tetap
 lewat jadwal diingatkan ulang tiap 7 hari; status direset setelah part diganti.
 
+## Jenis kendaraan
+
+Kendaraan bisa berjenis **Mobil** atau **Sepeda motor**. Setiap part berlaku untuk satu jenis (menu Part punya tab per jenis),
+jadi dashboard, form catatan, dan pengingat hanya memakai part yang sesuai. Server menolak part yang tidak cocok,
+dan jenis kendaraan/part tidak bisa diubah setelah dipakai di catatan.
+
+Master part sepeda motor matic (sampel Honda BeAT eSP 2021; interval perkiraan umum) – aman dijalankan ulang:
+
+```bash
+php artisan db:seed --class=MotorcyclePartSeeder
+```
+
 ## Model 3D
 
-Tanpa file model, dashboard memakai model prosedural berproporsi Hyundai Palisade
-(`frontend/src/components/PalisadeModel.jsx`).
+Tanpa file model, dashboard memakai model prosedural bawaan (`frontend/src/components/models/`):
+Hyundai Palisade 2026, Toyota Kijang Innova 2012 (mobil) dan Honda BeAT eSP 2021 (sepeda motor).
+Kamera viewer menyesuaikan ukuran kendaraan.
 
 Untuk memakai file `.glb`:
 

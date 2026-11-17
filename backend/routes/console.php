@@ -23,11 +23,12 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 /*
- * Tidak ada halaman registrasi: user dibuat oleh pengelola lewat perintah ini.
- *   php artisan user:create "Nama User" email@contoh.com
- * Jika email sudah ada, password user tersebut di-reset.
+ * Pengguna dikelola admin di menu Pengguna. Perintah ini jalur darurat dari terminal,
+ * mis. membuat admin pertama atau memulihkan akses bila semua admin lupa password:
+ *   php artisan user:create "Nama User" email@contoh.com [--admin]
+ * Jika email sudah ada: password di-reset dan akun diaktifkan kembali.
  */
-Artisan::command('user:create {name} {email}', function (string $name, string $email) {
+Artisan::command('user:create {name} {email} {--admin : Jadikan admin}', function (string $name, string $email) {
     $password = $this->secret('Password (min. 8 karakter)');
 
     $validator = Validator::make(
@@ -42,10 +43,14 @@ Artisan::command('user:create {name} {email}', function (string $name, string $e
         return 1;
     }
 
-    $user = User::updateOrCreate(['email' => strtolower($email)], ['name' => $name, 'password' => $password]);
+    $attrs = ['name' => $name, 'password' => $password, 'is_active' => true];
+    if ($this->option('admin')) {
+        $attrs['role'] = User::ROLE_ADMIN;
+    }
+    $user = User::updateOrCreate(['email' => strtolower($email)], $attrs);
     $user->tokens()->delete(); // paksa login ulang di semua perangkat
 
-    $this->info(($user->wasRecentlyCreated ? 'User dibuat: ' : 'Password di-reset: ').$user->email);
+    $this->info(($user->wasRecentlyCreated ? 'User dibuat: ' : 'Password di-reset: ')."{$user->email} (peran: {$user->role})");
 
     return 0;
 })->purpose('Buat user baru atau reset password user');

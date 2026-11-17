@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
-import { useAuth } from './auth'
+import { useAuth, useIsAdmin } from './auth'
 import { useUi } from './store'
-import { km } from './format'
+import { km, vehicleLabel } from './format'
 import LoginPage from './components/LoginPage'
 import Sidebar from './components/Sidebar'
-import VehicleViewer from './components/VehicleViewer'
+import { VehicleViewer, Viewer3DBoundary, preload3D } from './lazy3d'
 import DashboardStats from './components/DashboardStats'
 import NotificationBell from './components/NotificationBell'
 import ThemeToggle from './components/ThemeToggle'
@@ -16,6 +16,7 @@ import RecordForm from './components/RecordForm'
 import VehiclesPage from './components/VehiclesPage'
 import PartsPage from './components/PartsPage'
 import ReportsPage from './components/reports/ReportsPage'
+import UsersPage from './components/users/UsersPage'
 
 const MENU = [
   {
@@ -32,6 +33,10 @@ const MENU = [
       { key: 'vehicles', label: 'Kendaraan' },
       { key: 'parts', label: 'Part' },
     ],
+  },
+  {
+    title: 'Pengaturan',
+    items: [{ key: 'users', label: 'Pengguna', adminOnly: true }],
   },
 ]
 const PAGES = MENU.flatMap((g) => g.items)
@@ -60,10 +65,13 @@ export default function App() {
 }
 
 function MainApp() {
+  useEffect(() => preload3D(), [])
   const [page, setPageState] = useState(readPage)
   const vehicleId = useUi((s) => s.vehicleId)
   const setVehicle = useUi((s) => s.setVehicle)
   const formOpen = useUi((s) => s.formRecord !== null)
+  const isAdmin = useIsAdmin()
+  const userLoaded = useAuth((s) => !!s.user)
 
   const setPage = (p) => {
     setPageState(p)
@@ -98,12 +106,16 @@ function MainApp() {
     )
   }
 
-  const current = PAGES.find((p) => p.key === page)
+  // Menu & halaman khusus admin disembunyikan dari user biasa (API juga menolaknya: 403).
+  const menu = MENU.map((g) => ({ ...g, items: g.items.filter((i) => !i.adminOnly || isAdmin) })).filter((g) => g.items.length)
+  const requested = PAGES.find((p) => p.key === page)
+  const activePage = requested.adminOnly && !isAdmin ? (userLoaded ? 'dashboard' : null) : page
+  const current = PAGES.find((p) => p.key === activePage) ?? requested
   const noVehicle = vehicles.data && vehicles.data.length === 0
 
   return (
     <div className="app">
-      <Sidebar groups={MENU} active={page} onSelect={setPage} />
+      <Sidebar groups={menu} active={activePage} onSelect={setPage} />
 
       <div className="main">
         <header className="topbar">
@@ -112,7 +124,7 @@ function MainApp() {
             <div className="vehicle-picker">
               <select value={vehicleId ?? ''} onChange={(e) => setVehicle(Number(e.target.value))}>
                 {vehicles.data.map((v) => (
-                  <option key={v.id} value={v.id}>{v.plate_number} – {v.brand} {v.model} {v.year ?? ''}</option>
+                  <option key={v.id} value={v.id}>{vehicleLabel(v, { withOwner: isAdmin, withYear: true })}</option>
                 ))}
               </select>
               {vehicle && <span className="odo">{km(vehicle.odometer)}</span>}
@@ -125,29 +137,34 @@ function MainApp() {
         {current.perVehicle && noVehicle && (
           <div className="empty">
             <h3>Belum ada kendaraan</h3>
-            <p className="muted">Tambahkan kendaraan terlebih dahulu untuk mulai mencatat maintenance.</p>
+            <p className="muted">Tambahkan kendaraan Anda terlebih dahulu untuk mulai mencatat maintenance.</p>
             <button className="primary" onClick={() => setPage('vehicles')}>Ke halaman Kendaraan</button>
           </div>
         )}
 
-        {page === 'dashboard' && vehicle && (
+        {activePage === 'dashboard' && vehicle && (
           <main className="dashboard">
             <section className="dash-main">
               <DashboardStats vehicle={vehicle} parts={parts.data} />
-              <VehicleViewer vehicle={vehicle} parts={parts.data} />
+              <Viewer3DBoundary>
+                <Suspense fallback={<div className="viewer viewer-loading"><span>Memuat model 3D…</span></div>}>
+                  <VehicleViewer vehicle={vehicle} parts={parts.data} />
+                </Suspense>
+              </Viewer3DBoundary>
             </section>
             <PartPanel vehicle={vehicle} parts={parts.data} />
           </main>
         )}
-        {page === 'records' && vehicle && <RecordsTable vehicle={vehicle} />}
-        {page === 'vehicles' && (
+        {activePage === 'records' && vehicle && <RecordsTable vehicle={vehicle} />}
+        {activePage === 'vehicles' && (
           <VehiclesPage
             vehicles={vehicles.data}
             onOpenDashboard={(id) => { setVehicle(id); setPage('dashboard') }}
           />
         )}
-        {page === 'parts' && <PartsPage />}
-        {page === 'reports' && <ReportsPage vehicles={vehicles.data} />}
+        {activePage === 'parts' && <PartsPage />}
+        {activePage === 'reports' && <ReportsPage vehicles={vehicles.data} />}
+        {activePage === 'users' && <UsersPage />}
       </div>
 
       {formOpen && <RecordForm vehicles={vehicles.data} />}

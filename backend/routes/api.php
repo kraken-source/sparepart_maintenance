@@ -6,22 +6,28 @@ use App\Http\Controllers\Api\MaintenanceRecordController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
 
 // Maks. 5 percobaan login per menit per IP+email (cegah brute force).
 Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
+    // ---------------- Semua pengguna (admin & user) ----------------
     Route::get('me', [AuthController::class, 'me']);
+    Route::put('me/password', [AuthController::class, 'changePassword'])->middleware('throttle:6,1');
     Route::post('logout', [AuthController::class, 'logout']);
 
+    // Kendaraan: setiap user mengelola miliknya sendiri, admin semua (dicek di VehiclePolicy)
+    Route::apiResource('vehicles', VehicleController::class);
     Route::get('vehicles/{vehicle}/parts-status', [VehicleController::class, 'partsStatus']);
     Route::get('vehicles/{vehicle}/summary', [VehicleController::class, 'summary']);
+    Route::get('parts', [PartController::class, 'index']);
+    Route::get('parts/{part}', [PartController::class, 'show']);
 
-    Route::apiResource('vehicles', VehicleController::class);
-    Route::apiResource('parts', PartController::class);
-    Route::apiResource('maintenance-records', MaintenanceRecordController::class);
+    // Catatan maintenance: semua boleh lihat, tambah, ubah (hapus khusus admin, di bawah)
+    Route::apiResource('maintenance-records', MaintenanceRecordController::class)->except('destroy');
 
     // Lampiran foto nota / bukti servis
     Route::post('maintenance-records/{maintenance_record}/attachments', [MaintenanceAttachmentController::class, 'store']);
@@ -37,4 +43,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('notifications/check', [NotificationController::class, 'check'])->middleware('throttle:6,1');
     Route::post('notifications/{id}/read', [NotificationController::class, 'markRead']);
+
+    // ---------------- Khusus admin ----------------
+    Route::middleware('can:admin')->group(function () {
+        Route::apiResource('parts', PartController::class)->only(['store', 'update', 'destroy']);
+        Route::delete('maintenance-records/{maintenance_record}', [MaintenanceRecordController::class, 'destroy']);
+
+        Route::apiResource('users', UserController::class)->except('show');
+    });
 });

@@ -71,7 +71,12 @@ export function Shell({ color, metalness = 0.3, roughness = 0.5, opacity = 1, xr
   return (
     <mesh castShadow {...props}>
       {children}
+      {/*
+        key: Three.js tidak menerapkan perubahan `transparent` pada material yang sudah ada
+        (perlu needsUpdate). Dengan key, material dibuat ulang saat X-ray dinyalakan/dimatikan.
+      */}
       <meshStandardMaterial
+        key={xray ? 'xray' : 'solid'}
         color={color}
         metalness={metalness}
         roughness={roughness}

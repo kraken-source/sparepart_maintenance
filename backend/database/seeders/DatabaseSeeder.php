@@ -14,14 +14,19 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // User awal untuk development. firstOrCreate: password tidak di-reset saat seed ulang.
-        User::firstOrCreate(
+        $admin = User::firstOrCreate(
             ['email' => 'admin@example.com'],
-            ['name' => 'Admin', 'password' => env('SEED_ADMIN_PASSWORD', 'password')],
+            ['name' => 'Admin', 'password' => env('SEED_ADMIN_PASSWORD', 'password'), 'role' => 'admin'],
         );
+
+        // Master part sepeda motor (terpisah agar bisa dijalankan sendiri di database yang sudah ada).
+        $this->call(MotorcyclePartSeeder::class);
 
         $vehicle = Vehicle::firstOrCreate(
             ['plate_number' => 'B 1234 PLS'],
             [
+                'user_id' => $admin->id,
+                'type' => Vehicle::TYPE_CAR,
                 'brand' => 'Hyundai',
                 'model' => 'Palisade',
                 'year' => 2024,
@@ -51,7 +56,7 @@ class DatabaseSeeder extends Seeder
         $byMesh = [];
         foreach ($parts as [$name, $category, $mesh, $km, $days]) {
             $byMesh[$mesh] = Part::firstOrCreate(
-                ['mesh_name' => $mesh],
+                ['vehicle_type' => Vehicle::TYPE_CAR, 'mesh_name' => $mesh],
                 ['name' => $name, 'category' => $category, 'interval_km' => $km, 'interval_days' => $days],
             );
         }

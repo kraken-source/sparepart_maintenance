@@ -22,7 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->alias(['active' => \App\Http\Middleware\EnsureUserIsActive::class]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         /*
@@ -50,7 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
             $message = $e->getMessage();
-            $english = $message === '' || $e->getPrevious() instanceof ModelNotFoundException || str_starts_with($message, 'The route');
+            $english = $message === '' || $message === 'Not Found' || $e->getPrevious() instanceof ModelNotFoundException || str_starts_with($message, 'The route');
 
             return $json($english ? 'Data tidak ditemukan.' : $message, 404);
         });

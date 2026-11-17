@@ -1,8 +1,11 @@
-import { Component, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei'
-import * as THREE from 'three'
-import { BUILTIN_MODELS, DEFAULT_MODEL, resolveModel } from './models'
+import { ContactShadows, OrbitControls } from '@react-three/drei'
+import { DEFAULT_MODEL_BY_TYPE, VIEW_BY_TYPE, resolveModel } from './models/meta'
+import { MODEL_COMPONENTS } from './models'
+import StudioEnvironment from './StudioEnvironment'
+
+const GltfVehicle = lazy(() => import('./GltfVehicle'))
 import { PartStatusContext, overdueGlow } from './Part'
 import { STATUS, useUi } from '../store'
 import { useTheme } from '../theme'
@@ -31,8 +34,11 @@ export default function VehicleViewer({ vehicle, parts }) {
     return VIEWS[key] ? { key, n: 0 } : null
   })
 
-  const model = resolveModel(vehicle?.model_3d_url)
-  const Builtin = BUILTIN_MODELS[model.kind === 'builtin' ? model.key : DEFAULT_MODEL].Component
+  const type = vehicle?.type ?? 'car'
+  const model = resolveModel(vehicle?.model_3d_url, type)
+  const Builtin = MODEL_COMPONENTS[model.kind === 'builtin' ? model.key : DEFAULT_MODEL_BY_TYPE[type]]
+  // Kamera & lantai mengikuti ukuran kendaraan (motor jauh lebih kecil dari mobil)
+  const camera = VIEW_BY_TYPE[type] ?? VIEW_BY_TYPE.car
   const fallback = <Builtin xray={xray} />
 
   return (
@@ -45,16 +51,12 @@ export default function VehicleViewer({ vehicle, parts }) {
       >
         <hemisphereLight args={['#dbeafe', '#1e293b', 0.6]} />
         <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
-        {/* Environment studio dibangun lokal (tanpa unduh HDR) agar cat & krom memantulkan cahaya */}
-        <Environment resolution={256} frames={1}>
-          <Lightformer intensity={2} rotation-x={Math.PI / 2} position={[0, 6, 0]} scale={[12, 6, 1]} />
-          <Lightformer intensity={1.5} rotation-y={Math.PI / 2} position={[-8, 1.5, 0]} scale={[20, 1.2, 1]} />
-          <Lightformer intensity={1.5} rotation-y={-Math.PI / 2} position={[8, 1.5, 0]} scale={[20, 1.2, 1]} />
-          <Lightformer intensity={1} position={[0, 2, 9]} scale={[10, 2, 1]} />
-          <Lightformer intensity={1} rotation-y={Math.PI} position={[0, 2, -9]} scale={[10, 2, 1]} />
-        </Environment>
+        {/* Environment studio dibangun lokal (tanpa unduh HDR & tanpa loader) agar cat & krom memantulkan cahaya */}
+        <StudioEnvironment />
 
-        <Showroom alert={overdue.length > 0} />
+        <group scale={camera.scale}>
+          <Showroom alert={overdue.length > 0} />
+        </group>
 
         <PartStatusContext.Provider value={statusMap}>
           <Suspense fallback={null}>
@@ -67,9 +69,9 @@ export default function VehicleViewer({ vehicle, parts }) {
             )}
           </Suspense>
         </PartStatusContext.Provider>
-        <ContactShadows position={[0, 0.002, 0]} opacity={0.6} scale={10} blur={2.5} far={3} />
-        <OrbitControls makeDefault target={[0, 0.8, 0]} minDistance={3} maxDistance={12} maxPolarAngle={Math.PI / 2.05} />
-        <CameraRig view={view} />
+        <ContactShadows position={[0, 0.002, 0]} opacity={0.6} scale={10 * camera.scale} blur={2.5} far={3 * camera.scale} />
+        <OrbitControls makeDefault target={camera.target} minDistance={camera.minDistance} maxDistance={camera.maxDistance} maxPolarAngle={Math.PI / 2.05} />
+        <CameraRig view={view} camera={camera} />
       </Canvas>
 
       <div className="viewer-toolbar">
@@ -144,95 +146,20 @@ const VIEWS = {
   top: { label: 'Atas', position: [0.01, 9, 0] },
 }
 
-/** Memindahkan kamera ke preset saat tombol sudut pandang ditekan. */
-function CameraRig({ view }) {
+/**
+ * Memindahkan kamera ke preset (Default, Depan, …). Posisi preset dikalikan skala kendaraan,
+ * dan kamera kembali ke tampilan default setiap kali ukuran kendaraan berganti (mobil ↔ motor).
+ */
+function CameraRig({ view, camera: cfg }) {
   const { camera, controls } = useThree()
   useEffect(() => {
-    if (!view || !controls) return
-    camera.position.set(...VIEWS[view.key].position)
-    controls.target.set(0, 0.8, 0)
+    if (!controls) return
+    const [x, y, z] = VIEWS[view?.key ?? 'iso'].position
+    camera.position.set(x * cfg.scale, y * cfg.scale, z * cfg.scale)
+    controls.target.set(...cfg.target)
     controls.update()
-  }, [view, camera, controls])
+  }, [view, cfg, camera, controls])
   return null
-}
-
-/** Memuat model .glb dan mewarnai mesh yang namanya terdaftar sebagai part. */
-function GltfVehicle({ url, statusMap, xray }) {
-  const { scene } = useGLTF(url)
-  const selectedMesh = useUi((s) => s.selectedMesh)
-  const selectMesh = useUi((s) => s.selectMesh)
-  const model = useMemo(() => scene.clone(true), [scene])
-  const blinking = useRef([]) // material part yang lewat jadwal
-  const ghosts = useRef([]) // material bayangan merah yang menembus bodi
-
-  // Cari nama part dari mesh yang diklik atau parent-nya (GLB sering bertingkat).
-  const partNameOf = (obj) => {
-    for (let o = obj; o; o = o.parent) if (statusMap[o.name] !== undefined) return o.name
-    return null
-  }
-
-  useLayoutEffect(() => {
-    const list = []
-    const ghostMats = []
-
-    // Buang bayangan dari render sebelumnya (status bisa berubah).
-    const old = []
-    model.traverse((o) => o.userData.ghost && old.push(o))
-    old.forEach((g) => {
-      g.parent.remove(g)
-      g.material.dispose()
-    })
-
-    model.traverse((o) => {
-      if (!o.isMesh || o.userData.ghost) return
-      if (!o.userData.cloned) {
-        o.material = o.material.clone()
-        o.userData.cloned = true
-      }
-      const part = partNameOf(o)
-      if (part) {
-        const status = statusMap[part]
-        o.material.emissive = new THREE.Color(STATUS[status]?.color ?? '#000')
-        o.material.emissiveIntensity = part === selectedMesh ? 1.1 : status && status !== 'unknown' ? 0.3 : 0
-        if (status === 'overdue') {
-          if (part !== selectedMesh) list.push(o.material)
-          // Bayangan merah menembus bodi, sebagai anak mesh agar transformnya ikut.
-          const mat = new THREE.MeshBasicMaterial({ color: '#ff2d2d', transparent: true, opacity: 0.4, depthTest: false, depthWrite: false })
-          const g = new THREE.Mesh(o.geometry, mat)
-          g.userData.ghost = true
-          g.renderOrder = 10
-          g.raycast = () => {}
-          o.add(g)
-          ghostMats.push(mat)
-        }
-      } else {
-        o.material.transparent = xray
-        o.material.opacity = xray ? 0.1 : 1
-        o.material.depthWrite = !xray
-      }
-    })
-    blinking.current = list
-    ghosts.current = ghostMats
-  })
-
-  useFrame(({ clock }) => {
-    const glow = overdueGlow(clock.elapsedTime)
-    for (const m of blinking.current) m.emissiveIntensity = glow
-    for (const m of ghosts.current) m.opacity = 0.08 + (glow / 1.65) * 0.6
-  })
-
-  return (
-    <primitive
-      object={model}
-      onClick={(e) => {
-        const part = partNameOf(e.object)
-        if (part) {
-          e.stopPropagation()
-          selectMesh(part)
-        }
-      }}
-    />
-  )
 }
 
 class ModelErrorBoundary extends Component {

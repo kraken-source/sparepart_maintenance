@@ -40,12 +40,20 @@ class DueReminderService
             $items = DB::transaction(fn () => $this->collectAlerts($vehicle, $now));
 
             if ($items) {
-                Notification::send(User::all(), new VehicleMaintenanceDue($vehicle, $items));
+                Notification::send($this->recipients($vehicle), new VehicleMaintenanceDue($vehicle, $items));
                 $sent++;
             }
         }
 
         return $sent;
+    }
+
+    /** Penerima: pemilik kendaraan + semua admin aktif (admin melihat semua kendaraan). */
+    private function recipients(Vehicle $vehicle)
+    {
+        return User::where('is_active', true)
+            ->where(fn ($q) => $q->where('role', User::ROLE_ADMIN)->orWhere('id', $vehicle->user_id))
+            ->get();
     }
 
     /** Tentukan part mana yang perlu diberitahukan, sekaligus perbarui status pengingatnya. */

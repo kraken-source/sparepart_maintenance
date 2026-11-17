@@ -8,6 +8,7 @@ use App\Services\CostReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -23,14 +24,14 @@ class ReportController extends Controller
     {
         [$from, $to, $vehicleId] = $this->filters($request);
 
-        return response()->json(['data' => $this->reports->build($from, $to, $vehicleId)]);
+        return response()->json(['data' => $this->reports->build($from, $to, $vehicleId, $request->user())]);
     }
 
     /** GET /api/reports/costs/export → file .xlsx */
     public function export(Request $request): BinaryFileResponse
     {
         [$from, $to, $vehicleId] = $this->filters($request);
-        $export = new CostReportExport($this->reports->build($from, $to, $vehicleId));
+        $export = new CostReportExport($this->reports->build($from, $to, $vehicleId, $request->user()));
 
         return response()->download($export->store(), $export->filename(), [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -42,7 +43,10 @@ class ReportController extends Controller
         $data = $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
-            'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
+            // Hanya kendaraan yang boleh dilihat user (milik sendiri; admin: semua).
+            'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where(
+                fn ($q) => $request->user()->isAdmin() ? $q : $q->where('user_id', $request->user()->id),
+            )],
         ], [], ['from' => 'tanggal awal', 'to' => 'tanggal akhir', 'vehicle_id' => 'kendaraan']);
 
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();

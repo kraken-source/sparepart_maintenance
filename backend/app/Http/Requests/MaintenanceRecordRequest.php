@@ -2,20 +2,42 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Part;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class MaintenanceRecordRequest extends FormRequest
 {
+    /** Edit catatan: kendaraannya harus milik user (atau user admin) – dicek sebelum validasi. */
     public function authorize(): bool
     {
-        return true; // TODO: ganti dengan policy setelah autentikasi ditambahkan
+        $record = $this->route('maintenance_record');
+        if ($record) {
+            Gate::authorize('update', $record->vehicle);
+        }
+
+        return true;
     }
 
     public function rules(): array
     {
+        $user = $this->user();
+
         return [
-            'vehicle_id' => ['required', 'integer', 'exists:vehicles,id'],
-            'part_id' => ['required', 'integer', 'exists:parts,id'],
+            // Hanya kendaraan yang boleh dilihat user (milik sendiri; admin: semua).
+            'vehicle_id' => ['required', 'integer', Rule::exists('vehicles', 'id')->where(
+                fn ($q) => $user->isAdmin() ? $q : $q->where('user_id', $user->id),
+            )],
+            // Part harus untuk jenis kendaraan yang sama (part motor tidak bisa dipakai di mobil).
+            'part_id' => ['required', 'integer', 'exists:parts,id', function ($attribute, $value, $fail) {
+                $vehicleType = Vehicle::whereKey($this->input('vehicle_id'))->value('type');
+                $partType = Part::whereKey($value)->value('vehicle_type');
+                if ($vehicleType && $partType && $vehicleType !== $partType) {
+                    $fail('Part ini untuk '.strtolower(Vehicle::TYPES[$partType] ?? $partType).', tidak sesuai dengan jenis kendaraan yang dipilih.');
+                }
+            }],
             'action' => ['required', 'in:replace,repair,inspect'],
             'service_date' => ['required', 'date', 'before_or_equal:today'],
             'odometer' => ['required', 'integer', 'min:0', 'max:9999999'],

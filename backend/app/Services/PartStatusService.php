@@ -33,7 +33,8 @@ class PartStatusService
             ->groupBy('part_id')
             ->pluck('total', 'part_id');
 
-        return Part::orderBy('category')->orderBy('name')->get()->map(function (Part $part) use ($vehicle, $last, $counts, $today) {
+        // Hanya part untuk jenis kendaraan ini (part motor tidak muncul di mobil, dan sebaliknya).
+        return Part::forType($vehicle->type)->orderBy('category')->orderBy('name')->get()->map(function (Part $part) use ($vehicle, $last, $counts, $today) {
             $record = $last->get($part->id);
             $life = $record ? PartLife::evaluate($record, $part, $vehicle->odometer, $today) : null;
 

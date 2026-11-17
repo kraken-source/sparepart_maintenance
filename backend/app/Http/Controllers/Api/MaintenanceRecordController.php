@@ -11,6 +11,7 @@ use App\Support\PartLife;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Modul CRUD: catatan maintenance / penggantian sparepart.
@@ -31,6 +32,8 @@ class MaintenanceRecordController extends Controller
         $records = MaintenanceRecord::query()
             ->withSuperseded()
             ->with(self::RELATIONS)
+            // Hanya catatan kendaraan yang boleh dilihat user (milik sendiri; admin: semua).
+            ->whereIn('vehicle_id', Vehicle::visibleTo($request->user())->select('id'))
             ->when($request->integer('vehicle_id'), fn ($q, $id) => $q->where('vehicle_id', $id))
             ->when($request->integer('part_id'), fn ($q, $id) => $q->where('part_id', $id))
             ->when($request->input('mesh_name'), fn ($q, $mesh) => $q->whereHas('part', fn ($p) => $p->where('mesh_name', $mesh)))
@@ -65,6 +68,8 @@ class MaintenanceRecordController extends Controller
 
     public function show(MaintenanceRecord $maintenanceRecord): JsonResponse
     {
+        Gate::authorize('view', $maintenanceRecord->vehicle);
+
         return response()->json(['data' => $this->present($maintenanceRecord->id)]);
     }
 

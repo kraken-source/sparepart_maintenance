@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, validationErrors } from '../api'
 import { toNumberOrNull } from '../format'
 import { Field, FormFooter, Modal } from './ui'
+import { VEHICLE_TYPES } from './models/meta'
 
 /** Ubah nama part menjadi saran mesh_name: "Busi Iridium" -> "busi_iridium" */
 const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
@@ -10,7 +11,9 @@ const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/
 export default function PartForm({ part, categories, onClose }) {
   const qc = useQueryClient()
   const isEdit = !!part?.id
+  const typeLocked = isEdit && (part.maintenance_records_count ?? 0) > 0 // sudah dipakai → server menolak ganti jenis
   const [form, setForm] = useState({
+    vehicle_type: part?.vehicle_type ?? 'car',
     name: part?.name ?? '',
     category: part?.category ?? '',
     mesh_name: part?.mesh_name ?? '',
@@ -74,6 +77,15 @@ export default function PartForm({ part, categories, onClose }) {
     >
       {errors._general && <p className="error">{errors._general}</p>}
       <div className="grid">
+        <Field
+          label="Untuk jenis kendaraan"
+          error={errors.vehicle_type}
+          hint={typeLocked ? 'Tidak bisa diubah karena part sudah dipakai di catatan.' : null}
+        >
+          <select value={form.vehicle_type} onChange={set('vehicle_type')} disabled={typeLocked}>
+            {Object.entries(VEHICLE_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </Field>
         <Field label="Nama part" error={errors.name}>
           <input value={form.name} onChange={set('name')} placeholder="Busi" autoFocus />
         </Field>

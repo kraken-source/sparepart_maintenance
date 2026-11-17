@@ -5,6 +5,12 @@ export const tanggal = (d) =>
 
 export const ACTIONS = { replace: 'Ganti', repair: 'Perbaikan', inspect: 'Pengecekan' }
 
+/** "B 1234 PLS – Hyundai Palisade 2024" (+ " · Pemilik" untuk admin yang melihat kendaraan semua user). */
+export function vehicleLabel(v, { withOwner = false, withYear = false } = {}) {
+  const base = `${v.plate_number} – ${v.brand} ${v.model}${withYear && v.year ? ` ${v.year}` : ''}`
+  return withOwner && v.owner ? `${base} · ${v.owner.name}` : base
+}
+
 /** Ubah '' menjadi null dan string angka menjadi Number untuk field numerik. */
 export const toNumberOrNull = (v) => (v === '' || v == null ? null : Number(v))
 

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { preload3D } from '../lazy3d'
 import { useMutation } from '@tanstack/react-query'
 import { api, validationErrors } from '../api'
 import { useAuth } from '../auth'
@@ -7,6 +8,9 @@ export default function LoginPage() {
   const setSession = useAuth((s) => s.setSession)
   const [form, setForm] = useState({ email: '', password: '' })
   const [errors, setErrors] = useState({})
+
+  // Unduh paket 3D di latar belakang selagi user mengisi login.
+  useEffect(() => preload3D(), [])
 
   const login = useMutation({
     mutationFn: api.login,

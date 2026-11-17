@@ -109,6 +109,22 @@ button.active { background: var(--primary); border-color: var(--primary); color:
   border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; white-space: nowrap;
 }
 
+/* ---- tab jenis kendaraan (halaman Part) ---- */
+.type-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+.type-tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 14px; color: var(--muted); }
+.type-tabs button.active { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+.type-tabs .pill { margin-left: 4px; }
+
+/* ---- pengguna ---- */
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border); }
+.pill-accent { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+.pill-muted { color: var(--muted); margin-left: 6px; font-weight: 500; }
+tr.row-inactive td { opacity: 0.6; }
+.modal label.check { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.modal label.check span { color: var(--text); font-size: 1em; }
+.modal label.check small { flex-basis: 100%; }
+.sidebar-user .logout + .logout { margin-left: -6px; }
+
 /* ---- tombol ikon (tema) ---- */
 .icon-btn { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 8px; color: var(--muted); }
 .icon-btn:hover { border-color: var(--primary); color: var(--text); }
@@ -229,6 +245,8 @@ button.stat:hover { border-color: var(--tone); }
   position: relative; flex: 1; min-height: 380px;
   background: var(--viewer-bg);
 }
+.viewer-loading { display: grid; place-items: center; color: var(--muted); }
+.viewer-error { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text); }
 .dash-main .viewer { margin: 14px; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
 .viewer-toolbar { position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 1; }
 .viewer-toolbar button { background: var(--glass); backdrop-filter: blur(6px); }

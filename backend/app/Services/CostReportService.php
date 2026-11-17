@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MaintenanceRecord;
 use App\Models\Part;
+use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -19,13 +20,15 @@ class CostReportService
 {
     private const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-    public function build(Carbon $from, Carbon $to, ?int $vehicleId = null): array
+    /** $viewer: batasi ke kendaraan yang boleh dilihat user tsb. Null = semua (mis. dari terminal). */
+    public function build(Carbon $from, Carbon $to, ?int $vehicleId = null, ?User $viewer = null): array
     {
         $records = MaintenanceRecord::query()
             ->with(['part:id,name,category', 'vehicle:id,plate_number,brand,model'])
             ->whereDate('service_date', '>=', $from->toDateString())
             ->whereDate('service_date', '<=', $to->toDateString())
             ->when($vehicleId, fn ($q) => $q->where('vehicle_id', $vehicleId))
+            ->when($viewer, fn ($q) => $q->whereIn('vehicle_id', Vehicle::visibleTo($viewer)->select('id')))
             ->orderBy('service_date')
             ->orderBy('id')
             ->get();

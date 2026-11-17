@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { api, errorMessage } from '../../api'
-import { ACTIONS, km, tanggal } from '../../format'
+import { ACTIONS, km, tanggal, vehicleLabel } from '../../format'
+import { useIsAdmin } from '../../auth'
 import { HorizontalBars, MonthlyStackedChart, categoryColor, rupiah, rupiahShort } from './charts'
 
 const iso = (d) => d.toLocaleDateString('sv-SE')
@@ -24,6 +25,7 @@ function lastMonths(n) {
 
 /** Halaman laporan biaya maintenance. */
 export default function ReportsPage({ vehicles }) {
+  const isAdmin = useIsAdmin()
   const [preset, setPreset] = useState('12m')
   const [range, setRange] = useState(() => PRESETS['12m'][1]())
   const [vehicleId, setVehicleId] = useState('')
@@ -63,7 +65,7 @@ export default function ReportsPage({ vehicles }) {
         )}
         <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} aria-label="Kendaraan">
           <option value="">Semua kendaraan</option>
-          {vehicles?.map((v) => <option key={v.id} value={v.id}>{v.plate_number} – {v.brand} {v.model}</option>)}
+          {vehicles?.map((v) => <option key={v.id} value={v.id}>{vehicleLabel(v, { withOwner: isAdmin })}</option>)}
         </select>
         <span className="spacer" />
         <button onClick={() => exportXlsx.mutate()} disabled={!d || exportXlsx.isPending}>

@@ -29,7 +29,7 @@ export function rupiahShort(n) {
 }
 
 /** Skala sumbu Y dengan langkah "bulat" (1, 2, 2.5, 5 × 10^n). */
-function niceTicks(max, count = 4) {
+export function niceTicks(max, count = 4) {
   if (max <= 0) return [0, 1]
   const raw = max / count
   const pow = 10 ** Math.floor(Math.log10(raw))
