@@ -48,6 +48,25 @@ Login dibatasi 5 percobaan per menit per email + IP.
 
 Untuk MySQL, ubah `DB_CONNECTION=mysql` beserta `DB_*` lainnya di `backend/.env`.
 
+## Pengingat jatuh tempo
+
+Part yang mendekati / melewati jadwal ganti memunculkan notifikasi di lonceng aplikasi.
+Pemeriksaan berjalan otomatis setiap hari pukul 07.00 dan setiap kali catatan maintenance
+atau odometer berubah. Bisa juga manual: tombol **Periksa sekarang** di lonceng, atau
+
+```bash
+php artisan maintenance:check-due
+```
+
+Jadwal harian membutuhkan scheduler Laravel yang berjalan:
+
+- Development: `php artisan schedule:work` (biarkan terminal terbuka)
+- Server Linux: cron `* * * * * cd /path/backend && php artisan schedule:run >> /dev/null 2>&1`
+- Windows: Task Scheduler menjalankan `php artisan schedule:run` setiap 1 menit
+
+Anti-spam: notifikasi dibuat saat part baru masuk status *Segera*/*Lewat jadwal*; part yang tetap
+lewat jadwal diingatkan ulang tiap 7 hari; status direset setelah part diganti.
+
 ## Model 3D
 
 Tanpa file model, dashboard memakai model prosedural berproporsi Hyundai Palisade

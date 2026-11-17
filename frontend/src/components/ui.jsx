@@ -3,7 +3,8 @@
 export function Modal({ title, onClose, onSubmit, children, footer }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
+      {/* noValidate: pesan validasi selalu dari server (Bahasa Indonesia), bukan tooltip browser */}
+      <form className="modal" noValidate onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
         <h3>{title}</h3>
         {children}
         <div className="actions">{footer}</div>

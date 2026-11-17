@@ -45,6 +45,27 @@ export const api = {
   updateRecord: (id, payload) => http.put(`/maintenance-records/${id}`, payload).then((r) => r.data.data),
   deleteRecord: (id) => http.delete(`/maintenance-records/${id}`),
 
+  // --- Laporan biaya ---
+  costReport: (params) => http.get('/reports/costs', { params }).then((r) => r.data.data),
+  /** Unduh file Excel: ambil sebagai blob (perlu token) lalu picu download di browser. */
+  exportCostReport: async (params) => {
+    const res = await http.get('/reports/costs/export', { params, responseType: 'blob' })
+    const name = /filename="?([^";]+)"?/.exec(res.headers['content-disposition'] ?? '')?.[1] ?? 'laporan-biaya.xlsx'
+    const url = URL.createObjectURL(res.data)
+    const a = Object.assign(document.createElement('a'), { href: url, download: name })
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return name
+  },
+
+  // --- Notifikasi di aplikasi ---
+  notifications: () => http.get('/notifications').then((r) => r.data),
+  markNotificationRead: (id) => http.post(`/notifications/${id}/read`),
+  markAllNotificationsRead: () => http.post('/notifications/read-all'),
+  checkDueNow: () => http.post('/notifications/check').then((r) => r.data),
+
   // --- Lampiran (foto nota / bukti servis) ---
   uploadAttachments: (recordId, files) => {
     const form = new FormData()
@@ -63,7 +84,16 @@ export function validationErrors(err) {
   return Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, v[0]]))
 }
 
-/** Pesan error tunggal (untuk alert, mis. gagal hapus karena masih dipakai). */
+/**
+ * Pesan error tunggal dalam Bahasa Indonesia (untuk alert, mis. gagal hapus karena masih dipakai).
+ * Pesan dari server sudah berbahasa Indonesia; pesan bawaan axios ("Network Error",
+ * "Request failed with status code …") diganti agar seragam.
+ */
 export function errorMessage(err) {
-  return err?.response?.data?.message || err?.message || 'Terjadi kesalahan'
+  const res = err?.response
+  if (!res) return 'Tidak dapat terhubung ke server. Periksa koneksi atau pastikan backend berjalan.'
+  const message = typeof res.data?.message === 'string' ? res.data.message : null
+  if (message) return message
+  if (res.status >= 500) return 'Terjadi kesalahan pada server. Silakan coba lagi.'
+  return `Permintaan gagal (kode ${res.status}).`
 }

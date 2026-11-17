@@ -1,9 +1,22 @@
 <?php
 
 use App\Models\User;
+use App\Services\DueReminderService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Validator;
+
+/*
+ * Pengingat jatuh tempo part. Dijalankan otomatis setiap hari 07:00 (zona waktu aplikasi),
+ * juga bisa manual: php artisan maintenance:check-due
+ */
+Artisan::command('maintenance:check-due', function (DueReminderService $reminders) {
+    $n = $reminders->check();
+    $this->info("Pemeriksaan selesai: {$n} kendaraan mendapat notifikasi.");
+})->purpose('Periksa part yang mendekati/melewati jadwal ganti dan buat notifikasi');
+
+Schedule::command('maintenance:check-due')->dailyAt('07:00')->withoutOverlapping();
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

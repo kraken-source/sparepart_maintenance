@@ -46,7 +46,8 @@ export default function PartPanel({ vehicle, parts }) {
               <div className="pl-body">
                 <div className="pl-row">
                   <span className="pl-name">{p.name}</span>
-                  <small style={{ color: STATUS[p.status].color }}>{STATUS[p.status].label}</small>
+                  {/* teks memakai warna teks; identitas status dibawa titik berwarna di kiri */}
+                  <small className={`pl-status ${p.status}`}>{STATUS[p.status].label}</small>
                 </div>
                 {p.used_ratio != null && <LifeBar ratio={p.used_ratio} status={p.status} />}
                 <small className="muted">{p.status === 'unknown' ? 'Belum pernah dicatat' : remainingText(p) || 'Sesuai kondisi'}</small>

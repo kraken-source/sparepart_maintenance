@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\MaintenanceRecordRequest;
 use App\Models\MaintenanceRecord;
 use App\Models\Vehicle;
+use App\Services\DueReminderService;
 use App\Support\PartLife;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\DB;
  */
 class MaintenanceRecordController extends Controller
 {
+    public function __construct(private DueReminderService $reminders) {}
+
     private const RELATIONS = [
         'part:id,name,category,mesh_name,interval_km,interval_days',
         'vehicle:id,plate_number,brand,model,odometer',
@@ -55,6 +58,7 @@ class MaintenanceRecordController extends Controller
 
             return $record;
         });
+        $this->reminders->checkQuietly($record->vehicle_id);
 
         return response()->json(['data' => $this->present($record->id)], 201);
     }
@@ -66,10 +70,14 @@ class MaintenanceRecordController extends Controller
 
     public function update(MaintenanceRecordRequest $request, MaintenanceRecord $maintenanceRecord): JsonResponse
     {
+        $previousVehicle = $maintenanceRecord->vehicle_id;
         DB::transaction(function () use ($request, $maintenanceRecord) {
             $maintenanceRecord->update($this->payload($request));
             $this->syncOdometer($maintenanceRecord);
         });
+        foreach (array_unique([$previousVehicle, $maintenanceRecord->vehicle_id]) as $vehicleId) {
+            $this->reminders->checkQuietly($vehicleId);
+        }
 
         return response()->json(['data' => $this->present($maintenanceRecord->id)]);
     }
@@ -77,6 +85,7 @@ class MaintenanceRecordController extends Controller
     public function destroy(MaintenanceRecord $maintenanceRecord): JsonResponse
     {
         $maintenanceRecord->delete();
+        $this->reminders->checkQuietly($maintenanceRecord->vehicle_id);
 
         return response()->json(null, 204);
     }

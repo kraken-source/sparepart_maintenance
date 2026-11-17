@@ -23,6 +23,10 @@ export default function VehicleForm({ vehicle, onClose }) {
 
   const done = () => {
     qc.invalidateQueries({ queryKey: ['vehicles'] })
+    // odometer berubah → status part & pengingat ikut berubah
+    qc.invalidateQueries({ queryKey: ['parts-status'] })
+    qc.invalidateQueries({ queryKey: ['notifications'] })
+    qc.invalidateQueries({ queryKey: ['report'] })
     onClose()
   }
 

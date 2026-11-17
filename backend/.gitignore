@@ -21,3 +21,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# Cadangan .env lokal (berisi APP_KEY / kredensial)
+.env.bak*

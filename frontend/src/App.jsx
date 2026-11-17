@@ -8,11 +8,14 @@ import LoginPage from './components/LoginPage'
 import Sidebar from './components/Sidebar'
 import VehicleViewer from './components/VehicleViewer'
 import DashboardStats from './components/DashboardStats'
+import NotificationBell from './components/NotificationBell'
+import ThemeToggle from './components/ThemeToggle'
 import PartPanel from './components/PartPanel'
 import RecordsTable from './components/RecordsTable'
 import RecordForm from './components/RecordForm'
 import VehiclesPage from './components/VehiclesPage'
 import PartsPage from './components/PartsPage'
+import ReportsPage from './components/reports/ReportsPage'
 
 const MENU = [
   {
@@ -20,6 +23,7 @@ const MENU = [
     items: [
       { key: 'dashboard', label: 'Dashboard 3D', perVehicle: true },
       { key: 'records', label: 'Catatan Maintenance', perVehicle: true },
+      { key: 'reports', label: 'Laporan Biaya' },
     ],
   },
   {
@@ -114,6 +118,8 @@ function MainApp() {
               {vehicle && <span className="odo">{km(vehicle.odometer)}</span>}
             </div>
           )}
+          <ThemeToggle />
+          <NotificationBell onOpenDashboard={() => setPage('dashboard')} />
         </header>
 
         {current.perVehicle && noVehicle && (
@@ -141,6 +147,7 @@ function MainApp() {
           />
         )}
         {page === 'parts' && <PartsPage />}
+        {page === 'reports' && <ReportsPage vehicles={vehicles.data} />}
       </div>
 
       {formOpen && <RecordForm vehicles={vehicles.data} />}

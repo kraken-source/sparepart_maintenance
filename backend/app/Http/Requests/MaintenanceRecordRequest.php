@@ -29,6 +29,13 @@ class MaintenanceRecordRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'service_date.before_or_equal' => 'Tanggal servis tidak boleh melebihi hari ini.',
+        ];
+    }
+
     public function attributes(): array
     {
         return [

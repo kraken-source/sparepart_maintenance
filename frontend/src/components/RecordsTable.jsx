@@ -41,6 +41,8 @@ export default function RecordsTable({ vehicle }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['records'] })
       qc.invalidateQueries({ queryKey: ['parts-status'] })
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+      qc.invalidateQueries({ queryKey: ['report'] })
     },
   })
 

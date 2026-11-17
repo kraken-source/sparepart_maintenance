@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -52,6 +54,18 @@ class MaintenanceRecord extends Model
         static::deleting(function (self $record) {
             $record->attachments()->get()->each->delete();
         });
+    }
+
+    /**
+     * Simpan tanggal servis selalu sebagai "YYYY-MM-DD" (tanpa jam). Format campuran
+     * ("2026-10-18" vs "2026-10-18 00:00:00") membuat perbandingan teks di SQLite keliru,
+     * mis. catatan di hari terakhir rentang laporan tidak terhitung.
+     */
+    protected function serviceDate(): Attribute
+    {
+        return Attribute::make(
+            set: fn ($value) => $value === null ? null : Carbon::parse($value)->toDateString(),
+        );
     }
 
     public function vehicle(): BelongsTo

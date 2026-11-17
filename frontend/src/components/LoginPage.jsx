@@ -24,7 +24,7 @@ export default function LoginPage() {
 
   return (
     <div className="center-screen">
-      <form className="login-card" onSubmit={submit}>
+      <form className="login-card" noValidate onSubmit={submit}>
         <h2>Sparepart Maintenance</h2>
         <p className="muted">Masuk untuk melanjutkan</p>
 

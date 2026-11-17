@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { BUILTIN_MODELS, DEFAULT_MODEL, resolveModel } from './models'
 import { PartStatusContext, overdueGlow } from './Part'
 import { STATUS, useUi } from '../store'
+import { useTheme } from '../theme'
 
 /**
  * Viewer 3D kendaraan.
@@ -107,7 +108,14 @@ export default function VehicleViewer({ vehicle, parts }) {
 }
 
 /** Lantai bundar ala showroom; cincinnya ikut berdenyut merah bila ada part lewat jadwal. */
+const FLOOR = {
+  dark: { floor: '#111a2b', metalness: 0.6, roughness: 0.35, ring: '#0b1220' },
+  light: { floor: '#d9e1ec', metalness: 0.2, roughness: 0.55, ring: '#cbd5e1' },
+}
+
 function Showroom({ alert }) {
+  const theme = useTheme((s) => s.theme)
+  const f = FLOOR[theme] ?? FLOOR.dark
   const ring = useRef()
   useFrame(({ clock }) => {
     if (!ring.current) return
@@ -117,11 +125,11 @@ function Showroom({ alert }) {
     <group>
       <mesh rotation-x={-Math.PI / 2} position={[0, -0.002, 0]} receiveShadow>
         <circleGeometry args={[4.2, 96]} />
-        <meshStandardMaterial color="#111a2b" metalness={0.6} roughness={0.35} />
+        <meshStandardMaterial color={f.floor} metalness={f.metalness} roughness={f.roughness} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]}>
         <ringGeometry args={[4.12, 4.2, 128]} />
-        <meshStandardMaterial ref={ring} color="#0b1220" emissive={alert ? '#ef4444' : '#3b82f6'} emissiveIntensity={0.6} />
+        <meshStandardMaterial ref={ring} color={f.ring} emissive={alert ? '#ef4444' : '#3b82f6'} emissiveIntensity={0.6} />
       </mesh>
     </group>
   )

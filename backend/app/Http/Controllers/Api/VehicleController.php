@@ -4,10 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\VehicleRequest;
-use App\Models\MaintenanceRecord;
-use App\Models\Part;
 use App\Models\Vehicle;
-use App\Support\PartLife;
+use App\Services\DueReminderService;
+use App\Services\PartStatusService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 
@@ -33,9 +32,12 @@ class VehicleController extends Controller
         return response()->json(['data' => $vehicle->loadCount('maintenanceRecords')]);
     }
 
-    public function update(VehicleRequest $request, Vehicle $vehicle): JsonResponse
+    public function update(VehicleRequest $request, Vehicle $vehicle, DueReminderService $reminders): JsonResponse
     {
         $vehicle->update($request->validated());
+        if ($vehicle->wasChanged('odometer')) {
+            $reminders->checkQuietly($vehicle); // odometer naik bisa membuat part jatuh tempo
+        }
 
         return response()->json(['data' => $vehicle]);
     }
@@ -79,51 +81,8 @@ class VehicleController extends Controller
      * GET /api/vehicles/{vehicle}/parts-status
      * Status tiap part untuk kendaraan ini, dipakai untuk mewarnai model 3D.
      */
-    public function partsStatus(Vehicle $vehicle): JsonResponse
+    public function partsStatus(Vehicle $vehicle, PartStatusService $status): JsonResponse
     {
-        // Catatan terakhir per part (yang mereset interval: replace).
-        $last = MaintenanceRecord::where('vehicle_id', $vehicle->id)
-            ->where('action', 'replace')
-            ->orderBy('service_date')
-            ->orderBy('id')
-            ->get()
-            ->keyBy('part_id'); // keyBy menimpa -> tersisa yang paling akhir
-
-        $counts = MaintenanceRecord::where('vehicle_id', $vehicle->id)
-            ->selectRaw('part_id, count(*) as total')
-            ->groupBy('part_id')
-            ->pluck('total', 'part_id');
-
-        $today = Carbon::today();
-
-        $data = Part::orderBy('category')->orderBy('name')->get()->map(function (Part $part) use ($vehicle, $last, $counts, $today) {
-            $record = $last->get($part->id);
-            $life = $record ? PartLife::evaluate($record, $part, $vehicle->odometer, $today) : null;
-
-            return [
-                'id' => $part->id,
-                'name' => $part->name,
-                'category' => $part->category,
-                'mesh_name' => $part->mesh_name,
-                'interval_km' => $part->interval_km,
-                'interval_days' => $part->interval_days,
-                'status' => $life['status'] ?? 'unknown',
-                'last_service_date' => $record?->service_date?->toDateString(),
-                'last_odometer' => $record?->odometer,
-                // Usia pakai yang berlaku: dari catatan terakhir ('record') atau default part ('part')
-                'life_source' => $life['source'] ?? null,
-                'life_km' => $life['life_km'] ?? null,
-                'life_months' => $life['life_months'] ?? null,
-                'life_days' => $life['life_days'] ?? null,
-                'next_km' => $life['next_km'] ?? null,
-                'next_service_date' => $life['next_date'] ?? null,
-                'remaining_km' => $life['remaining_km'] ?? null,
-                'remaining_days' => $life['remaining_days'] ?? null,
-                'used_ratio' => $life['used_ratio'] ?? null,
-                'record_count' => (int) ($counts[$part->id] ?? 0),
-            ];
-        });
-
-        return response()->json(['data' => $data, 'odometer' => $vehicle->odometer]);
+        return response()->json(['data' => $status->forVehicle($vehicle), 'odometer' => $vehicle->odometer]);
     }
 }

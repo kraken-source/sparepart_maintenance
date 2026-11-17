@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="id" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sparepart Maintenance</title>
+    <script>
+      // Pasang tema sebelum halaman digambar agar tidak berkedip (pilihan user, atau ikut sistem).
+      ;(function () {
+        var t
+        try { t = localStorage.getItem('sm_theme') } catch (e) {}
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+        }
+        document.documentElement.dataset.theme = t
+        document.documentElement.style.colorScheme = t
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

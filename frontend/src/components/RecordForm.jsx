@@ -71,6 +71,8 @@ export default function RecordForm({ vehicles }) {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['records'] })
     qc.invalidateQueries({ queryKey: ['parts-status'] })
+    qc.invalidateQueries({ queryKey: ['notifications'] })
+    qc.invalidateQueries({ queryKey: ['report'] })
     qc.invalidateQueries({ queryKey: ['parts'] })
     qc.invalidateQueries({ queryKey: ['vehicles'] })
   }
