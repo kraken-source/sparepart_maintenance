@@ -6,6 +6,7 @@ use App\Models\MaintenanceRecord;
 use App\Models\Part;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\VehicleModel;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -31,8 +32,7 @@ class DatabaseSeeder extends Seeder
                 'model' => 'Palisade',
                 'year' => 2024,
                 'odometer' => 42500,
-                // Taruh file di frontend/public/models/palisade.glb lalu isi: '/models/palisade.glb'
-                'model_3d_url' => null,
+                'vehicle_model_id' => VehicleModel::where('builtin_key', 'palisade')->value('id'),
             ],
         );
 

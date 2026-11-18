@@ -52,6 +52,20 @@ export const api = {
   updateRecord: (id, payload) => http.put(`/maintenance-records/${id}`, payload).then((r) => r.data.data),
   deleteRecord: (id) => http.delete(`/maintenance-records/${id}`),
 
+  // --- Master model 3D (ubah khusus admin) ---
+  vehicleModels: () => http.get('/vehicle-models').then((r) => r.data.data),
+  /** payload: { name, vehicle_type, notes, is_active, file?: File, thumbnail?: Blob } → multipart */
+  createVehicleModel: (payload) => http.post('/vehicle-models', toForm(payload)).then((r) => r.data.data),
+  // PHP tidak membaca file pada PUT multipart → kirim POST + _method=PUT (method spoofing Laravel)
+  updateVehicleModel: (id, payload) => http.post(`/vehicle-models/${id}`, toForm({ ...payload, _method: 'PUT' })).then((r) => r.data.data),
+  deleteVehicleModel: (id) => http.delete(`/vehicle-models/${id}`),
+  /** Simpan thumbnail hasil tangkapan 3D (+ nama objek untuk model bawaan). */
+  saveModelThumbnail: (id, thumbnail, meshNames) => {
+    const form = toForm({ thumbnail })
+    meshNames?.forEach((n) => form.append('mesh_names[]', n))
+    return http.post(`/vehicle-models/${id}/thumbnail`, form).then((r) => r.data.data)
+  },
+
   // --- Bahan bakar ---
   fuelTypes: () => http.get('/fuel-types').then((r) => r.data.data),
   createFuelType: (payload) => http.post('/fuel-types', payload).then((r) => r.data.data),
@@ -93,6 +107,17 @@ export const api = {
   /** File lampiran sebagai Blob (perlu token, jadi tidak bisa langsung dipakai di <img src>). */
   attachmentBlob: (id) => http.get(`/attachments/${id}`, { responseType: 'blob' }).then((r) => r.data),
   deleteAttachment: (id) => http.delete(`/attachments/${id}`),
+}
+
+/** Objek → FormData (untuk upload). null/undefined dilewati, boolean → 1/0, Blob tanpa nama diberi nama. */
+function toForm(payload) {
+  const form = new FormData()
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null) continue
+    if (value instanceof Blob) form.append(key, value, value.name ?? `${key}.png`)
+    else form.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value))
+  }
+  return form
 }
 
 /** Ambil pesan error validasi Laravel (422) menjadi { field: 'pesan' }. */

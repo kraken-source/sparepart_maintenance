@@ -5,7 +5,7 @@ import { useAuth, useIsAdmin } from './auth'
 import { useUi } from './store'
 import { km, vehicleLabel } from './format'
 import LoginPage from './components/LoginPage'
-import Sidebar from './components/Sidebar'
+import Sidebar, { Icon } from './components/Sidebar'
 import { VehicleViewer, Viewer3DBoundary, preload3D } from './lazy3d'
 import DashboardStats from './components/DashboardStats'
 import NotificationBell from './components/NotificationBell'
@@ -19,6 +19,7 @@ import ReportsPage from './components/reports/ReportsPage'
 import UsersPage from './components/users/UsersPage'
 import FuelPage from './components/fuel/FuelPage'
 import FuelTypesPage from './components/fuel/FuelTypesPage'
+import VehicleModelsPage from './components/vehicle-models/VehicleModelsPage'
 
 const MENU = [
   {
@@ -36,6 +37,7 @@ const MENU = [
       { key: 'vehicles', label: 'Kendaraan' },
       { key: 'parts', label: 'Part' },
       { key: 'fuelTypes', label: 'Jenis BBM' },
+      { key: 'models3d', label: 'Model 3D' },
     ],
   },
   {
@@ -77,7 +79,9 @@ function MainApp() {
   const isAdmin = useIsAdmin()
   const userLoaded = useAuth((s) => !!s.user)
 
+  const [navOpen, setNavOpen] = useState(false)
   const setPage = (p) => {
+    setNavOpen(false)
     setPageState(p)
     try {
       localStorage.setItem(PAGE_KEY, p)
@@ -119,10 +123,14 @@ function MainApp() {
 
   return (
     <div className="app">
-      <Sidebar groups={menu} active={activePage} onSelect={setPage} />
+      <Sidebar groups={menu} active={activePage} onSelect={setPage} open={navOpen} onClose={() => setNavOpen(false)} />
 
       <div className="main">
         <header className="topbar">
+          {/* Layar HP: sidebar disembunyikan, dibuka lewat tombol menu ini */}
+          <button className="icon-btn menu-btn" onClick={() => setNavOpen(true)} aria-label="Buka menu" title="Menu">
+            <Icon name="menu" />
+          </button>
           <h1 className="page-title">{current.label}</h1>
           {current.perVehicle && vehicles.data?.length > 0 && (
             <div className="vehicle-picker">
@@ -162,6 +170,7 @@ function MainApp() {
         {activePage === 'records' && vehicle && <RecordsTable vehicle={vehicle} />}
         {activePage === 'fuel' && vehicle && <FuelPage key={vehicle.id} vehicle={vehicle} />}
         {activePage === 'fuelTypes' && <FuelTypesPage />}
+        {activePage === 'models3d' && <VehicleModelsPage />}
         {activePage === 'vehicles' && (
           <VehiclesPage
             vehicles={vehicles.data}

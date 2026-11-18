@@ -10,10 +10,16 @@ use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VehicleController;
+use App\Http\Controllers\Api\VehicleModelController;
 use Illuminate\Support\Facades\Route;
 
 // Maks. 5 percobaan login per menit per IP+email (cegah brute force).
 Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login');
+
+// File model 3D & thumbnail tanpa login: loader 3D dan <img> tidak bisa mengirim token,
+// dan isinya bukan data rahasia (hanya bentuk kendaraan).
+Route::get('vehicle-models/{vehicle_model}/file', [VehicleModelController::class, 'file']);
+Route::get('vehicle-models/{vehicle_model}/thumbnail', [VehicleModelController::class, 'thumbnailFile']);
 
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // ---------------- Semua pengguna (admin & user) ----------------
@@ -26,6 +32,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('vehicles/{vehicle}/parts-status', [VehicleController::class, 'partsStatus']);
     Route::get('vehicles/{vehicle}/summary', [VehicleController::class, 'summary']);
     Route::get('parts', [PartController::class, 'index']);
+    Route::get('vehicle-models', [VehicleModelController::class, 'index']);
     Route::get('parts/{part}', [PartController::class, 'show']);
 
     // Catatan maintenance: semua boleh lihat, tambah, ubah (hapus khusus admin, di bawah)
@@ -54,6 +61,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::middleware('can:admin')->group(function () {
         Route::apiResource('parts', PartController::class)->only(['store', 'update', 'destroy']);
         Route::apiResource('fuel-types', FuelTypeController::class)->only(['store', 'update', 'destroy']);
+        Route::apiResource('vehicle-models', VehicleModelController::class)->only(['store', 'update', 'destroy']);
+        Route::post('vehicle-models/{vehicle_model}/thumbnail', [VehicleModelController::class, 'thumbnail']);
         Route::delete('maintenance-records/{maintenance_record}', [MaintenanceRecordController::class, 'destroy']);
 
         Route::apiResource('users', UserController::class)->except('show');

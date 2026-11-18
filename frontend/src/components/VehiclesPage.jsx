@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { km } from '../format'
 import VehicleForm from './VehicleForm'
 import { VEHICLE_TYPES, modelLabel } from './models/meta'
+import ModelThumb from './vehicle-models/ModelThumb'
 import { useIsAdmin } from '../auth'
 
 /**
@@ -39,7 +40,7 @@ export default function VehiclesPage({ vehicles, onOpenDashboard }) {
         <button className="primary" onClick={() => setEditing({})}>+ Tambah kendaraan</button>
       </div>
 
-      <table>
+      <table className="cards-sm">
         <thead>
           <tr>
             <th>Plat nomor</th><th>Kendaraan</th>{isAdmin && <th>Pemilik</th>}<th>Tahun</th><th className="num">Odometer</th>
@@ -49,13 +50,18 @@ export default function VehiclesPage({ vehicles, onOpenDashboard }) {
         <tbody>
           {rows.map((v) => (
             <tr key={v.id}>
-              <td><strong>{v.plate_number}</strong></td>
-              <td>{v.brand} {v.model}<div className="muted">{VEHICLE_TYPES[v.type] ?? v.type}</div></td>
-              {isAdmin && <td>{v.owner?.name ?? <span className="muted">-</span>}</td>}
-              <td>{v.year ?? '-'}</td>
-              <td className="num">{km(v.odometer)}</td>
-              <td title={v.model_3d_url ?? ''}>{modelLabel(v.model_3d_url, v.type)}</td>
-              <td className="num">{v.maintenance_records_count ?? 0}</td>
+              <td data-label="Plat nomor" className="sm-title"><strong>{v.plate_number}</strong></td>
+              <td data-label="Kendaraan">{v.brand} {v.model}<div className="muted">{VEHICLE_TYPES[v.type] ?? v.type}</div></td>
+              {isAdmin && <td data-label="Pemilik">{v.owner?.name ?? <span className="muted">-</span>}</td>}
+              <td data-label="Tahun">{v.year ?? '-'}</td>
+              <td data-label="Odometer" className="num">{km(v.odometer)}</td>
+              <td data-label="Model 3D">
+                <span className="model-cell">
+                  <ModelThumb model={v.vehicle_model} className="tiny" />
+                  {modelLabel(v.vehicle_model, v.type)}
+                </span>
+              </td>
+              <td data-label="Catatan" className="num">{v.maintenance_records_count ?? 0}</td>
               <td className="row-actions">
                 <button className="link" onClick={() => onOpenDashboard(v.id)}>Lihat 3D</button>
                 <button className="link" onClick={() => setEditing(v)}>Edit</button>

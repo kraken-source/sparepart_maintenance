@@ -63,7 +63,8 @@ export default function RecordsTable({ vehicle }) {
         </button>
       </div>
 
-      <table>
+      {/* cards-sm: di layar HP setiap baris tampil sebagai kartu (label dari data-label) */}
+      <table className="cards-sm">
         <thead>
           <tr>
             <th>Tanggal</th><th>Part</th><th>Tindakan</th><th>Odometer</th>
@@ -73,15 +74,15 @@ export default function RecordsTable({ vehicle }) {
         <tbody>
           {d?.data.map((r) => (
             <tr key={r.id}>
-              <td>{tanggal(r.service_date)}</td>
-              <td>{r.part?.name}<div className="muted">{r.part?.category}</div></td>
-              <td>{ACTIONS[r.action]}</td>
-              <td>{km(r.odometer)}</td>
-              <td>{r.part_brand || '-'}</td>
-              <td>{r.workshop || '-'}</td>
-              <td className="num">{rupiah(r.cost)}</td>
-              <td><NextServiceCell record={r} /></td>
-              <td>
+              <td data-label="Tanggal">{tanggal(r.service_date)}</td>
+              <td data-label="Part" className="sm-title">{r.part?.name}<div className="muted">{r.part?.category}</div></td>
+              <td data-label="Tindakan">{ACTIONS[r.action]}</td>
+              <td data-label="Odometer">{km(r.odometer)}</td>
+              <td data-label="Merek part" className={r.part_brand ? '' : 'sm-hide'}>{r.part_brand || '-'}</td>
+              <td data-label="Bengkel" className={r.workshop ? '' : 'sm-hide'}>{r.workshop || '-'}</td>
+              <td data-label="Biaya" className="num">{rupiah(r.cost)}</td>
+              <td data-label="Ganti berikutnya" className={r.next_service ? '' : 'sm-hide'}><NextServiceCell record={r} /></td>
+              <td data-label="Lampiran" className={r.attachments?.length ? '' : 'sm-hide'}>
                 {r.attachments?.length > 0 ? (
                   <button className="link clip" onClick={() => openForm(r)} title="Lihat lampiran">
                     📎 {r.attachments.length}

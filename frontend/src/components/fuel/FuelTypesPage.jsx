@@ -23,18 +23,18 @@ export default function FuelTypesPage() {
         {isAdmin && <button className="primary" onClick={() => setEditing({ group: 'gasoline' })}>+ Tambah jenis BBM</button>}
       </div>
 
-      <table>
+      <table className="cards-sm">
         <thead>
           <tr><th>Nama</th><th>Kelompok</th><th>RON / CN</th><th>Status</th><th className="num">Dipakai</th><th /></tr>
         </thead>
         <tbody>
           {types.data?.map((t) => (
             <tr key={t.id} className={t.is_active ? '' : 'muted'}>
-              <td>{t.name}</td>
-              <td>{FUEL_GROUPS[t.group] ?? t.group}</td>
-              <td>{ratingLabel(t) || '-'}</td>
-              <td>{t.is_active ? <span className="pill pill-accent">Aktif</span> : <span className="pill">Nonaktif</span>}</td>
-              <td className="num">{t.fuel_logs_count}×</td>
+              <td data-label="Nama" className="sm-title">{t.name}</td>
+              <td data-label="Kelompok">{FUEL_GROUPS[t.group] ?? t.group}</td>
+              <td data-label="RON / CN">{ratingLabel(t) || '-'}</td>
+              <td data-label="Status">{t.is_active ? <span className="pill pill-accent">Aktif</span> : <span className="pill">Nonaktif</span>}</td>
+              <td data-label="Dipakai" className="num">{t.fuel_logs_count}×</td>
               <td className="row-actions">{isAdmin && <button className="link" onClick={() => setEditing(t)}>Edit</button>}</td>
             </tr>
           ))}

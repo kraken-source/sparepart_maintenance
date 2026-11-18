@@ -22,7 +22,7 @@ class Vehicle extends Model
     public const TYPES = [self::TYPE_CAR => 'Mobil', self::TYPE_MOTORCYCLE => 'Sepeda motor'];
 
     protected $fillable = [
-        'user_id', 'type', 'plate_number', 'brand', 'model', 'year', 'odometer', 'model_3d_url',
+        'user_id', 'type', 'vehicle_model_id', 'plate_number', 'brand', 'model', 'year', 'odometer',
         'fuel_group', 'default_fuel_type_id', 'tank_capacity',
     ];
 
@@ -30,7 +30,7 @@ class Vehicle extends Model
 
     protected $casts = [
         'user_id' => 'integer', 'year' => 'integer', 'odometer' => 'integer',
-        'default_fuel_type_id' => 'integer', 'tank_capacity' => 'float',
+        'default_fuel_type_id' => 'integer', 'tank_capacity' => 'float', 'vehicle_model_id' => 'integer',
     ];
 
     protected static function booted(): void
@@ -45,6 +45,12 @@ class Vehicle extends Model
     public function fuelLogs(): HasMany
     {
         return $this->hasMany(FuelLog::class);
+    }
+
+    /** Model 3D dari master (null = model bawaan default sesuai jenis kendaraan). */
+    public function vehicleModel(): BelongsTo
+    {
+        return $this->belongsTo(VehicleModel::class);
     }
 
     /** Jenis BBM yang otomatis terpilih saat mencatat pengisian. */

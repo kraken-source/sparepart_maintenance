@@ -51,7 +51,7 @@ export default function PartsPage() {
         {isAdmin && <button className="primary" onClick={() => setEditing({ vehicle_type: type })}>+ Tambah part {VEHICLE_TYPES[type].toLowerCase()}</button>}
       </div>
 
-      <table>
+      <table className="cards-sm">
         <thead>
           <tr>
             <th>Nama part</th><th>Kategori</th><th>Nama mesh 3D</th>
@@ -62,12 +62,12 @@ export default function PartsPage() {
         <tbody>
           {rows.map((p) => (
             <tr key={p.id}>
-              <td>{p.name}</td>
-              <td>{p.category}</td>
-              <td><code>{p.mesh_name}</code></td>
-              <td className="num">{p.interval_km ? km(p.interval_km) : '-'}</td>
-              <td className="num">{p.interval_days ? `${p.interval_days} hari` : '-'}</td>
-              <td className="num">{p.maintenance_records_count ?? 0}</td>
+              <td data-label="Nama part" className="sm-title">{p.name}</td>
+              <td data-label="Kategori">{p.category}</td>
+              <td data-label="Nama mesh 3D"><code>{p.mesh_name}</code></td>
+              <td data-label="Interval km" className="num">{p.interval_km ? km(p.interval_km) : '-'}</td>
+              <td data-label="Interval hari" className="num">{p.interval_days ? `${p.interval_days} hari` : '-'}</td>
+              <td data-label="Dipakai" className="num">{p.maintenance_records_count ?? 0}</td>
               <td className="row-actions">
                 {isAdmin && <button className="link" onClick={() => setEditing(p)}>Edit</button>}
               </td>

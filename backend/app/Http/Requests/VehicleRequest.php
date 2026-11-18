@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\FuelType;
 use App\Models\Vehicle;
+use App\Models\VehicleModel;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -63,7 +64,24 @@ class VehicleRequest extends FormRequest
             'model' => ['required', 'string', 'max:80'],
             'year' => ['nullable', 'integer', 'min:1950', 'max:'.(date('Y') + 1)],
             'odometer' => ['required', 'integer', "min:{$minOdometer}", 'max:9999999'],
-            'model_3d_url' => ['nullable', 'string', 'max:255'],
+            // Model 3D dari master: harus sesuai jenis kendaraan dan masih aktif
+            // (model nonaktif tetap boleh bila memang sudah dipakai kendaraan ini).
+            'vehicle_model_id' => [
+                'nullable', 'integer', 'exists:vehicle_models,id',
+                function ($attribute, $value, $fail) use ($vehicle) {
+                    $model = VehicleModel::find($value);
+                    $type = $this->input('type', $vehicle?->type ?? Vehicle::TYPE_CAR);
+                    if (! $model) {
+                        return;
+                    }
+                    if ($model->vehicle_type !== $type) {
+                        $fail("Model {$model->name} untuk ".strtolower(Vehicle::TYPES[$model->vehicle_type] ?? $model->vehicle_type)
+                            .', tidak sesuai dengan jenis kendaraan.');
+                    } elseif (! $model->is_active && $vehicle?->vehicle_model_id !== $model->id) {
+                        $fail("Model {$model->name} sudah tidak aktif.");
+                    }
+                },
+            ],
             // Bahan bakar: kelompok tidak bisa diubah bila sudah ada catatan pengisian.
             'fuel_group' => [
                 'sometimes', Rule::in(array_keys(FuelType::GROUPS)),
@@ -103,7 +121,7 @@ class VehicleRequest extends FormRequest
             'model' => 'model',
             'year' => 'tahun',
             'odometer' => 'odometer',
-            'model_3d_url' => 'URL model 3D',
+            'vehicle_model_id' => 'model 3D',
             'user_id' => 'pemilik',
             'type' => 'jenis kendaraan',
             'fuel_group' => 'jenis bahan bakar',

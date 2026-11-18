@@ -109,7 +109,7 @@ export default function FuelPage({ vehicle }) {
         <button className="primary" onClick={() => setEditing({})}>+ Isi BBM</button>
       </div>
 
-      <table className="fuel-table">
+      <table className="fuel-table cards-sm">
         <thead>
           <tr>
             <th>Tanggal</th><th className="num">Odometer</th><th>Jenis BBM</th><th className="num">Liter</th>
@@ -119,23 +119,23 @@ export default function FuelPage({ vehicle }) {
         <tbody>
           {d?.logs.map((log) => (
             <tr key={log.id}>
-              <td>
+              <td data-label="Tanggal">
                 {tanggal(log.filled_on)}
                 {log.station && <div className="muted">{log.station}</div>}
               </td>
-              <td className="num">
+              <td data-label="Odometer" className="num">
                 {km(log.odometer)}
                 {log.distance != null && <div className="muted">+{km(log.distance)}</div>}
               </td>
-              <td>{log.fuel_type?.name ?? '-'}</td>
-              <td className="num">{liter(log.liters)}</td>
-              <td className="num">{rupiah(log.price_per_liter)}</td>
-              <td className="num">{rupiah(log.total_cost)}</td>
-              <td>
+              <td data-label="Jenis BBM">{log.fuel_type?.name ?? '-'}</td>
+              <td data-label="Liter" className="num">{liter(log.liters)}</td>
+              <td data-label="Harga/L" className="num">{rupiah(log.price_per_liter)}</td>
+              <td data-label="Total" className="num">{rupiah(log.total_cost)}</td>
+              <td data-label="Isi">
                 <span className={`pill ${log.is_full ? 'pill-accent' : ''}`}>{log.is_full ? 'Penuh' : 'Sebagian'}</span>
                 {log.missed_previous && <div className="warn" title="Ada pengisian sebelumnya yang tidak dicatat">⚠ ada yang terlewat</div>}
               </td>
-              <td className="consumption">
+              <td data-label="Konsumsi" className="consumption">
                 {log.segment ? (
                   <>
                     <strong>{kmPerLiter(log.segment.km_per_liter)}</strong>

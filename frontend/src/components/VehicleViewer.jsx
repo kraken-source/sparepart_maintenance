@@ -11,22 +11,30 @@ import { STATUS, useUi } from '../store'
 import { useTheme } from '../theme'
 
 /**
- * Viewer 3D kendaraan.
- * - vehicle.model_3d_url = "builtin:<key>" → model prosedural bawaan (lihat ./models).
- * - Berisi URL file .glb → model GLB; bila gagal dimuat, kembali ke model bawaan default.
- * - Kosong → model bawaan default.
- * - Part yang lewat jadwal berkedip merah + banner peringatan di pojok kanan atas.
+ * Viewer 3D kendaraan. Model diambil dari master Model 3D (vehicle.vehicle_model):
+ * - model bawaan → komponen prosedural (lihat ./models)
+ * - file .glb    → dimuat dari file_url; bila gagal, kembali ke model bawaan default
+ * - kosong       → model bawaan default sesuai jenis kendaraan
+ * Part yang lewat jadwal berkedip merah + banner peringatan di pojok kanan atas.
+ *
+ * Mode pratinjau (halaman master Model 3D): `model` + `type` diberikan langsung, part di `highlight`
+ * diberi warna hijau, model .glb yang gagal TIDAK diganti model bawaan (dilaporkan lewat onModelError),
+ * dan `onReady({ capture, meshNames })` dipanggil setelah model tampil – untuk thumbnail otomatis.
  */
-export default function VehicleViewer({ vehicle, parts }) {
+export default function VehicleViewer({
+  vehicle, parts, model: modelProp, type: typeProp, preview = false, highlight = null, onReady, onModelError,
+}) {
   const xray = useUi((s) => s.xray)
   const toggleXray = useUi((s) => s.toggleXray)
   const selectMesh = useUi((s) => s.selectMesh)
 
   const statusMap = useMemo(
-    () => Object.fromEntries((parts ?? []).map((p) => [p.mesh_name, p.status])),
-    [parts],
+    () => preview
+      ? Object.fromEntries((highlight ?? []).map((m) => [m, 'ok']))
+      : Object.fromEntries((parts ?? []).map((p) => [p.mesh_name, p.status])),
+    [parts, preview, highlight],
   )
-  const overdue = useMemo(() => (parts ?? []).filter((p) => p.status === 'overdue'), [parts])
+  const overdue = useMemo(() => (preview ? [] : (parts ?? []).filter((p) => p.status === 'overdue')), [parts, preview])
 
   // Sudut pandang awal bisa diatur lewat URL, mis. ?view=front
   const [view, setView] = useState(() => {
@@ -34,12 +42,14 @@ export default function VehicleViewer({ vehicle, parts }) {
     return VIEWS[key] ? { key, n: 0 } : null
   })
 
-  const type = vehicle?.type ?? 'car'
-  const model = resolveModel(vehicle?.model_3d_url, type)
+  const type = typeProp ?? vehicle?.type ?? 'car'
+  const model = resolveModel(modelProp !== undefined ? modelProp : vehicle?.vehicle_model, type)
   const Builtin = MODEL_COMPONENTS[model.kind === 'builtin' ? model.key : DEFAULT_MODEL_BY_TYPE[type]]
   // Kamera & lantai mengikuti ukuran kendaraan (motor jauh lebih kecil dari mobil)
   const camera = VIEW_BY_TYPE[type] ?? VIEW_BY_TYPE.car
-  const fallback = <Builtin xray={xray} />
+  const builtin = <Builtin xray={xray} />
+  // Pratinjau: GLB yang gagal jangan disamarkan dengan model bawaan.
+  const fallback = preview && model.kind === 'glb' ? null : builtin
 
   return (
     <div className="viewer">
@@ -61,12 +71,14 @@ export default function VehicleViewer({ vehicle, parts }) {
         <PartStatusContext.Provider value={statusMap}>
           <Suspense fallback={null}>
             {model.kind === 'glb' ? (
-              <ModelErrorBoundary fallback={fallback} resetKey={model.url}>
+              <ModelErrorBoundary fallback={fallback} resetKey={model.url} onError={onModelError}>
                 <GltfVehicle url={model.url} statusMap={statusMap} xray={xray} />
               </ModelErrorBoundary>
             ) : (
-              fallback
+              builtin
             )}
+            {/* Di dalam Suspense yang sama → baru dipasang setelah model selesai dimuat */}
+            {onReady && <Snapshot key={model.kind === 'glb' ? model.url : model.key} onReady={onReady} />}
           </Suspense>
         </PartStatusContext.Provider>
         <ContactShadows position={[0, 0.002, 0]} opacity={0.6} scale={10 * camera.scale} blur={2.5} far={3 * camera.scale} />
@@ -85,7 +97,7 @@ export default function VehicleViewer({ vehicle, parts }) {
         </div>
       </div>
 
-      {overdue.length > 0 && (
+      {!preview && overdue.length > 0 && (
         <div className="overdue-alert" role="alert">
           <div className="overdue-head">
             <span className="pulse-dot" /> {overdue.length} part lewat jadwal ganti
@@ -98,15 +110,59 @@ export default function VehicleViewer({ vehicle, parts }) {
         </div>
       )}
 
-      <div className="legend">
-        {Object.entries(STATUS).map(([key, s]) => (
-          <span key={key}>
-            <i className={key === 'overdue' ? 'blink' : ''} style={{ background: s.color }} /> {s.label}
-          </span>
-        ))}
-      </div>
+      {!preview && (
+        <div className="legend">
+          {Object.entries(STATUS).map(([key, s]) => (
+            <span key={key}>
+              <i className={key === 'overdue' ? 'blink' : ''} style={{ background: s.color }} /> {s.label}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
+}
+
+/**
+ * Setelah model tampil (2 frame), beri akses untuk:
+ * - capture(): gambar tampilan sekarang → Blob PNG 480×300 (thumbnail). Dirender ulang lalu langsung
+ *   disalin dalam tugas yang sama, jadi tidak perlu preserveDrawingBuffer (yang memperlambat viewer).
+ * - meshNames(): nama semua objek di scene (untuk cek kecocokan dengan mesh_name part).
+ */
+function Snapshot({ onReady }) {
+  const { gl, scene, camera } = useThree()
+  useEffect(() => {
+    let second
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => onReady({
+        capture: (width = 480, height = 300) => {
+          gl.render(scene, camera)
+          const src = gl.domElement
+          // potong tengah agar rasio sama dengan thumbnail (seperti object-fit: cover)
+          const ratio = width / height
+          let sw = src.width
+          let sh = src.height
+          if (sw / sh > ratio) sw = sh * ratio
+          else sh = sw / ratio
+          const out = document.createElement('canvas')
+          out.width = width
+          out.height = height
+          out.getContext('2d').drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, width, height)
+          return new Promise((resolve) => out.toBlob(resolve, 'image/png'))
+        },
+        meshNames: () => {
+          const names = new Set()
+          scene.traverse((o) => o.name && !o.userData.ghost && names.add(o.name))
+          return [...names].sort()
+        },
+      }))
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
+  }, [onReady, gl, scene, camera])
+  return null
 }
 
 /** Lantai bundar ala showroom; cincinnya ikut berdenyut merah bila ada part lewat jadwal. */
@@ -171,7 +227,8 @@ class ModelErrorBoundary extends Component {
     if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null })
   }
   componentDidCatch(error) {
-    console.warn('Model GLB gagal dimuat, memakai model prosedural:', error.message)
+    console.warn('Model GLB gagal dimuat:', error.message)
+    this.props.onError?.(error)
   }
   render() {
     return this.state.error ? this.props.fallback : this.props.children

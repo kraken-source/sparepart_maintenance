@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\VehicleRequest;
 use App\Models\Vehicle;
+use App\Models\VehicleModel;
 use App\Services\DueReminderService;
 use App\Services\PartStatusService;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +24,7 @@ class VehicleController extends Controller
         $user = $request->user();
 
         $vehicles = Vehicle::visibleTo($user)
-            ->with('owner:id,name,email')
+            ->with(['owner:id,name,email', 'vehicleModel'])
             ->when($user->isAdmin() && $request->integer('owner_id'), fn ($q) => $q->where('user_id', $request->integer('owner_id')))
             ->withCount('maintenanceRecords')
             ->withMax('maintenanceRecords', 'odometer')
@@ -40,15 +41,17 @@ class VehicleController extends Controller
         $data = $request->validated();
         // Pemilik: admin boleh memilih; selain itu selalu user yang membuat.
         $data['user_id'] = $request->user()->isAdmin() && ! empty($data['user_id']) ? $data['user_id'] : $request->user()->id;
+        // Belum memilih model 3D → model bawaan default sesuai jenis kendaraan.
+        $data['vehicle_model_id'] ??= VehicleModel::defaultFor($data['type'] ?? Vehicle::TYPE_CAR)?->id;
 
-        return response()->json(['data' => Vehicle::create($data)->load('owner:id,name,email')], 201);
+        return response()->json(['data' => Vehicle::create($data)->load(['owner:id,name,email', 'vehicleModel'])], 201);
     }
 
     public function show(Vehicle $vehicle): JsonResponse
     {
         Gate::authorize('view', $vehicle);
 
-        return response()->json(['data' => $vehicle->load('owner:id,name,email')->loadCount(['maintenanceRecords', 'fuelLogs'])]);
+        return response()->json(['data' => $vehicle->load(['owner:id,name,email', 'vehicleModel'])->loadCount(['maintenanceRecords', 'fuelLogs'])]);
     }
 
     public function update(VehicleRequest $request, Vehicle $vehicle, DueReminderService $reminders): JsonResponse
@@ -65,7 +68,7 @@ class VehicleController extends Controller
             $reminders->checkQuietly($vehicle); // odometer naik bisa membuat part jatuh tempo
         }
 
-        return response()->json(['data' => $vehicle->load('owner:id,name,email')]);
+        return response()->json(['data' => $vehicle->load(['owner:id,name,email', 'vehicleModel'])]);
     }
 
     public function destroy(Vehicle $vehicle): JsonResponse

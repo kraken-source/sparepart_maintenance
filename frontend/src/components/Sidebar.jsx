@@ -14,11 +14,13 @@ const ICONS = {
   reports: 'M4 20h16M7 16v-4m5 4V8m5 8v-6',
   fuel: 'M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M4 10h10M14 8h2a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 0 3 0V8l-3-3',
   fuelTypes: 'M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z',
+  models3d: 'M4 5h16v14H4V5Zm0 10 4.5-4.5 4 4 2.5-2.5 5 5M15 9.5h.01',
   users: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 8v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
   key: 'M15 7a2 2 0 0 1 2 2m4 0a6 6 0 0 1-7.7 5.7L11 17H9v2H7v2H3v-3.6l6.3-6.3A6 6 0 1 1 21 9Z',
   sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-14v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z',
   bell:'M6 9a6 6 0 1 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9Zm4.3 11a2 2 0 0 0 3.4 0',
+  menu: 'M4 6h16M4 12h16M4 18h16',
 }
 
 export function Icon({ name }) {
@@ -30,9 +32,22 @@ export function Icon({ name }) {
   )
 }
 
-export default function Sidebar({ groups, active, onSelect }) {
+/**
+ * Menu kiri. Desktop: selalu tampil. Tablet: ikon saja. HP: laci (drawer) yang dibuka tombol menu
+ * di topbar dan tertutup saat memilih menu, klik di luar, atau tekan Escape.
+ */
+export default function Sidebar({ groups, active, onSelect, open = false, onClose = () => {} }) {
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
   return (
-    <aside className="sidebar">
+    <>
+    {open && <div className="nav-backdrop" onClick={onClose} aria-hidden="true" />}
+    <aside className={`sidebar ${open ? 'open' : ''}`}>
       <div className="sidebar-brand">
         <span className="logo">SM</span>
         <span className="label">Sparepart<br />Maintenance</span>
@@ -59,6 +74,7 @@ export default function Sidebar({ groups, active, onSelect }) {
 
       <UserBox />
     </aside>
+    </>
   )
 }
 

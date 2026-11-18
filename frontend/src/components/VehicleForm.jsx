@@ -5,7 +5,8 @@ import { useAuth, useIsAdmin } from '../auth'
 import { toNumberOrNull } from '../format'
 import { FUEL_GROUPS } from '../fuel'
 import { Field, FormFooter, Modal } from './ui'
-import { BUILTIN_MODELS, DEFAULT_MODEL_BY_TYPE, VEHICLE_TYPES, builtinValue, modelsForType, resolveModel } from './models/meta'
+import { DEFAULT_MODEL_BY_TYPE, VEHICLE_TYPES } from './models/meta'
+import ModelPicker from './vehicle-models/ModelPicker'
 
 export default function VehicleForm({ vehicle, onClose }) {
   const qc = useQueryClient()
@@ -16,7 +17,9 @@ export default function VehicleForm({ vehicle, onClose }) {
   const users = useQuery({ queryKey: ['users'], queryFn: api.users, enabled: isAdmin })
   const [ownerId, setOwnerId] = useState(vehicle?.user_id ?? me?.id ?? '')
   const initialType = vehicle?.type ?? 'car'
-  const current = resolveModel(vehicle?.model_3d_url, initialType)
+  // Pilihan model 3D dari master (dikelola admin di menu Master Data → Model 3D).
+  const models = useQuery({ queryKey: ['vehicle-models'], queryFn: api.vehicleModels })
+  const defaultModelId = (type) => models.data?.find((m) => m.builtin_key === DEFAULT_MODEL_BY_TYPE[type])?.id ?? ''
   // Jenis tidak bisa diubah bila sudah ada catatan (server juga menolak).
   const typeLocked = isEdit && (vehicle.maintenance_records_count ?? 0) > 0
   const fuelLocked = isEdit && (vehicle.fuel_logs_count ?? 0) > 0
@@ -29,8 +32,7 @@ export default function VehicleForm({ vehicle, onClose }) {
     model: vehicle?.model ?? '',
     year: vehicle?.year ?? '',
     odometer: vehicle?.odometer ?? '',
-    model_choice: current.kind === 'glb' ? 'glb' : current.key, // key model bawaan atau 'glb'
-    glb_url: current.kind === 'glb' ? current.url : '',
+    vehicle_model_id: vehicle?.vehicle_model_id ?? '', // kosong = model default jenis kendaraan
     fuel_group: vehicle?.fuel_group ?? 'gasoline',
     default_fuel_type_id: vehicle?.default_fuel_type_id ?? '',
     tank_capacity: vehicle?.tank_capacity ?? '',
@@ -50,13 +52,13 @@ export default function VehicleForm({ vehicle, onClose }) {
   const [errors, setErrors] = useState({})
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  // Ganti jenis → model 3D bawaan ikut diganti ke default jenis tsb (file .glb dibiarkan).
+  // Ganti jenis → model yang tidak cocok diganti model default jenis tsb.
   const setType = (e) => {
     const type = e.target.value
     setForm((f) => ({
       ...f,
       type,
-      model_choice: f.model_choice === 'glb' || BUILTIN_MODELS[f.model_choice]?.type === type ? f.model_choice : DEFAULT_MODEL_BY_TYPE[type],
+      vehicle_model_id: models.data?.find((m) => m.id === Number(f.vehicle_model_id))?.vehicle_type === type ? f.vehicle_model_id : '',
     }))
   }
 
@@ -83,14 +85,13 @@ export default function VehicleForm({ vehicle, onClose }) {
   const submit = (e) => {
     e.preventDefault()
     setErrors({})
-    const { model_choice, glb_url, ...rest } = form
     save.mutate({
-      ...rest,
+      ...form,
       year: toNumberOrNull(form.year),
       odometer: toNumberOrNull(form.odometer),
       default_fuel_type_id: toNumberOrNull(form.default_fuel_type_id),
       tank_capacity: toNumberOrNull(form.tank_capacity),
-      model_3d_url: model_choice === 'glb' ? glb_url.trim() || null : builtinValue(model_choice),
+      vehicle_model_id: toNumberOrNull(form.vehicle_model_id || defaultModelId(form.type)),
       ...(isAdmin && ownerId ? { user_id: Number(ownerId) } : {}),
     })
   }
@@ -167,24 +168,15 @@ export default function VehicleForm({ vehicle, onClose }) {
             </select>
           </Field>
         )}
-        <Field label="Model 3D" error={form.model_choice === 'glb' ? null : errors.model_3d_url}>
-          <select value={form.model_choice} onChange={set('model_choice')}>
-            {modelsForType(form.type).map(([key, m]) => (
-              <option key={key} value={key}>{m.label} (bawaan)</option>
-            ))}
-            <option value="glb">File .glb sendiri…</option>
-          </select>
-        </Field>
       </div>
-      {form.model_choice === 'glb' && (
-        <Field
-          label="URL file model 3D (.glb)"
-          error={errors.model_3d_url}
-          hint="Taruh file di frontend/public/models/, mis. /models/mobil-saya.glb. Nama objek part harus sama dengan nama mesh di menu Part."
-        >
-          <input value={form.glb_url} onChange={set('glb_url')} placeholder="/models/mobil-saya.glb" />
-        </Field>
-      )}
+      <ModelPicker
+        models={models.data}
+        type={form.type}
+        value={Number(form.vehicle_model_id) || defaultModelId(form.type)}
+        currentId={vehicle?.vehicle_model_id}
+        onChange={(id) => setForm((f) => ({ ...f, vehicle_model_id: id }))}
+        error={errors.vehicle_model_id}
+      />
     </Modal>
   )
 }

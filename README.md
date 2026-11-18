@@ -82,12 +82,12 @@ Login dibatasi 5 percobaan per menit per email + IP.
 ## Automated test
 
 ```bash
-# Backend (PHPUnit) – 115 test: usia pakai, API CRUD, lampiran, login, peran & pengguna, kepemilikan, jenis kendaraan,
-# pengingat & anti-spam, laporan biaya (termasuk per pemilik), bahan bakar & konsumsi, pesan Bahasa Indonesia
+# Backend (PHPUnit) – 129 test: usia pakai, API CRUD, lampiran, login, peran & pengguna, kepemilikan, jenis kendaraan,
+# pengingat & anti-spam, laporan biaya (termasuk per pemilik), bahan bakar & konsumsi, notifikasi, master model 3D, pesan Bahasa Indonesia
 cd backend
 php artisan test
 
-# Frontend (Vitest) – 35 test: format tanggal/angka, skala grafik, pesan error, hitung otomatis BBM
+# Frontend (Vitest) – 35 test: format tanggal/angka, skala grafik, pesan error, hitung otomatis BBM, model 3D & kecocokan part
 cd frontend
 npm test
 ```
@@ -161,15 +161,20 @@ php artisan db:seed --class=MotorcyclePartSeeder
 
 ## Model 3D
 
-Tanpa file model, dashboard memakai model prosedural bawaan (`frontend/src/components/models/`):
-Hyundai Palisade 2026, Toyota Kijang Innova 2012 (mobil) dan Honda BeAT eSP 2021 (sepeda motor).
-Kamera viewer menyesuaikan ukuran kendaraan.
+Model 3D dikelola di menu **Master Data → Model 3D** (tambah/ubah khusus admin; user memilih model di form kendaraan).
 
-Untuk memakai file `.glb`:
-
-1. Beri nama objek/mesh di Blender sesuai kolom `parts.mesh_name` (mis. `tire_front_left`, `battery`).
-2. Simpan ke `frontend/public/models/<nama>.glb`.
-3. Isi kolom *URL model 3D* kendaraan dengan `/models/<nama>.glb`.
+- **Model bawaan** dibuat di kode (`frontend/src/components/models/`): Hyundai Palisade 2026, Toyota Kijang Innova 2012
+  (mobil) dan Honda BeAT eSP 2021 (sepeda motor). Nama, status aktif, dan thumbnail-nya bisa diatur; modelnya tidak bisa dihapus.
+- **File .glb** di-upload admin (maks. 20 MB, glTF 2.0 biner). Isi file diperiksa dan nama objek di dalamnya dibaca
+  otomatis (`backend/app/Support/GlbInspector.php`). File disimpan di `backend/storage/app/private/vehicle-models/` dan
+  disajikan lewat `/api/vehicle-models/{id}/file` (tanpa login karena dibutuhkan viewer 3D; isinya bukan data rahasia).
+- **Thumbnail diambil otomatis** dari pratinjau 3D: saat upload, atau saat admin membuka model yang belum punya gambar.
+  Putar model lalu klik *Ambil ulang dari tampilan ini* untuk sudut lain.
+- **Part yang bisa diklik**: dialog model menampilkan ✓/✗ untuk setiap part. Objek di model harus bernama sama dengan
+  kolom `parts.mesh_name` (mis. `tire_front_left`, `battery`). Di Blender, beri nama objek sesuai mesh_name sebelum ekspor.
+  Spasi pada nama objek menjadi `_` dan titik dihapus (aturan three.js).
+- Kendaraan yang belum memilih model memakai model bawaan default sesuai jenisnya. Model yang masih dipakai kendaraan
+  tidak bisa dihapus (nonaktifkan saja).
 
 Sudut kamera awal bisa diatur lewat URL: `?view=front|side|rear|top`.
 

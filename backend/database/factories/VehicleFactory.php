@@ -18,7 +18,6 @@ class VehicleFactory extends Factory
             'model' => 'Kijang Innova',
             'year' => 2020,
             'odometer' => 50000,
-            'model_3d_url' => null,
         ];
     }
 }

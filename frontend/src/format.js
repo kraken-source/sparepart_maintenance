@@ -45,3 +45,9 @@ export function addMonths(isoDate, months) {
   target.setDate(Math.min(d, lastDay))
   return target.toLocaleDateString('sv-SE')
 }
+
+/** Ukuran file: 60 KB · 1,5 MB */
+export const fileSize = (bytes) =>
+  bytes == null ? '' : bytes >= 1048576
+    ? `${(bytes / 1048576).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`

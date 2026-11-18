@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\MaintenanceRecord;
 use App\Models\Vehicle;
+use App\Models\VehicleModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -22,7 +23,7 @@ class VehicleApiTest extends TestCase
     {
         return array_merge([
             'plate_number' => 'B 1822 WW', 'brand' => 'Toyota', 'model' => 'Kijang Innova', 'year' => 2012,
-            'odometer' => 150000, 'model_3d_url' => 'builtin:innova',
+            'odometer' => 150000, 'vehicle_model_id' => VehicleModel::where('builtin_key', 'innova')->value('id'),
         ], $override);
     }
 
@@ -32,7 +33,7 @@ class VehicleApiTest extends TestCase
         $this->postJson('/api/vehicles', $this->payload(['plate_number' => '  b   1822  ww ']))
             ->assertCreated()
             ->assertJsonPath('data.plate_number', 'B 1822 WW')
-            ->assertJsonPath('data.model_3d_url', 'builtin:innova');
+            ->assertJsonPath('data.vehicle_model.builtin_key', 'innova');
     }
 
     #[Test]
