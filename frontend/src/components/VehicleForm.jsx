@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, validationErrors } from '../api'
 import { useAuth, useIsAdmin } from '../auth'
 import { toNumberOrNull } from '../format'
+import { FUEL_GROUPS } from '../fuel'
 import { Field, FormFooter, Modal } from './ui'
 import { BUILTIN_MODELS, DEFAULT_MODEL_BY_TYPE, VEHICLE_TYPES, builtinValue, modelsForType, resolveModel } from './models/meta'
 
@@ -18,6 +19,9 @@ export default function VehicleForm({ vehicle, onClose }) {
   const current = resolveModel(vehicle?.model_3d_url, initialType)
   // Jenis tidak bisa diubah bila sudah ada catatan (server juga menolak).
   const typeLocked = isEdit && (vehicle.maintenance_records_count ?? 0) > 0
+  const fuelLocked = isEdit && (vehicle.fuel_logs_count ?? 0) > 0
+  const fuelTypes = useQuery({ queryKey: ['fuel-types'], queryFn: api.fuelTypes })
+  const minOdometer = Math.max(vehicle?.maintenance_records_max_odometer ?? 0, vehicle?.fuel_logs_max_odometer ?? 0)
   const [form, setForm] = useState({
     type: initialType,
     plate_number: vehicle?.plate_number ?? '',
@@ -27,7 +31,22 @@ export default function VehicleForm({ vehicle, onClose }) {
     odometer: vehicle?.odometer ?? '',
     model_choice: current.kind === 'glb' ? 'glb' : current.key, // key model bawaan atau 'glb'
     glb_url: current.kind === 'glb' ? current.url : '',
+    fuel_group: vehicle?.fuel_group ?? 'gasoline',
+    default_fuel_type_id: vehicle?.default_fuel_type_id ?? '',
+    tank_capacity: vehicle?.tank_capacity ?? '',
   })
+  const fuelOptions = (fuelTypes.data ?? []).filter(
+    (t) => t.group === form.fuel_group && (t.is_active || t.id === vehicle?.default_fuel_type_id),
+  )
+  // Ganti kelompok BBM → BBM default yang tidak cocok dikosongkan.
+  const setFuelGroup = (e) => {
+    const group = e.target.value
+    setForm((f) => ({
+      ...f,
+      fuel_group: group,
+      default_fuel_type_id: fuelTypes.data?.find((t) => t.id === Number(f.default_fuel_type_id))?.group === group ? f.default_fuel_type_id : '',
+    }))
+  }
   const [errors, setErrors] = useState({})
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -69,6 +88,8 @@ export default function VehicleForm({ vehicle, onClose }) {
       ...rest,
       year: toNumberOrNull(form.year),
       odometer: toNumberOrNull(form.odometer),
+      default_fuel_type_id: toNumberOrNull(form.default_fuel_type_id),
+      tank_capacity: toNumberOrNull(form.tank_capacity),
       model_3d_url: model_choice === 'glb' ? glb_url.trim() || null : builtinValue(model_choice),
       ...(isAdmin && ownerId ? { user_id: Number(ownerId) } : {}),
     })
@@ -114,9 +135,27 @@ export default function VehicleForm({ vehicle, onClose }) {
         <Field
           label="Odometer saat ini (km)"
           error={errors.odometer}
-          hint={vehicle?.maintenance_records_max_odometer ? `Minimal ${vehicle.maintenance_records_max_odometer.toLocaleString('id-ID')} km (catatan terakhir)` : null}
+          hint={minOdometer ? `Minimal ${minOdometer.toLocaleString('id-ID')} km (catatan terakhir)` : null}
         >
           <input type="number" min="0" value={form.odometer} onChange={set('odometer')} />
+        </Field>
+        <Field
+          label="Jenis bahan bakar"
+          error={errors.fuel_group}
+          hint={fuelLocked ? 'Tidak bisa diubah karena sudah ada catatan pengisian.' : null}
+        >
+          <select value={form.fuel_group} onChange={setFuelGroup} disabled={fuelLocked}>
+            {Object.entries(FUEL_GROUPS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </Field>
+        <Field label="BBM default" error={errors.default_fuel_type_id} hint="Otomatis terpilih saat mencatat pengisian.">
+          <select value={form.default_fuel_type_id} onChange={set('default_fuel_type_id')}>
+            <option value="">– Tidak ada –</option>
+            {fuelOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Kapasitas tangki (liter)" error={errors.tank_capacity} hint="Opsional, untuk peringatan salah input liter.">
+          <input type="number" min="1" step="0.1" value={form.tank_capacity} onChange={set('tank_capacity')} placeholder={form.type === 'motorcycle' ? '4,2' : '55'} />
         </Field>
         {isAdmin && (
           <Field label="Pemilik" error={errors.user_id} hint="Hanya pemilik (dan admin) yang bisa melihat kendaraan ini.">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\FuelType;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -37,8 +38,11 @@ class VehicleRequest extends FormRequest
     {
         $vehicle = $this->route('vehicle');
 
-        // Odometer tidak boleh lebih kecil dari km pada catatan maintenance yang sudah ada.
-        $minOdometer = $vehicle ? (int) $vehicle->maintenanceRecords()->max('odometer') : 0;
+        // Odometer tidak boleh lebih kecil dari km pada catatan maintenance / pengisian BBM yang sudah ada.
+        $minOdometer = $vehicle
+            ? max((int) $vehicle->maintenanceRecords()->max('odometer'), (int) $vehicle->fuelLogs()->max('odometer'))
+            : 0;
+        $fuelGroup = $this->input('fuel_group', $vehicle?->fuel_group ?? FuelType::GASOLINE);
 
         return [
             // Jenis kendaraan (default mobil). Tidak bisa diubah bila sudah ada catatan,
@@ -60,6 +64,25 @@ class VehicleRequest extends FormRequest
             'year' => ['nullable', 'integer', 'min:1950', 'max:'.(date('Y') + 1)],
             'odometer' => ['required', 'integer', "min:{$minOdometer}", 'max:9999999'],
             'model_3d_url' => ['nullable', 'string', 'max:255'],
+            // Bahan bakar: kelompok tidak bisa diubah bila sudah ada catatan pengisian.
+            'fuel_group' => [
+                'sometimes', Rule::in(array_keys(FuelType::GROUPS)),
+                function ($attribute, $value, $fail) use ($vehicle) {
+                    if ($vehicle && $vehicle->fuel_group !== $value && $vehicle->fuelLogs()->exists()) {
+                        $fail('Jenis bahan bakar tidak bisa diubah karena sudah ada catatan pengisian.');
+                    }
+                },
+            ],
+            'default_fuel_type_id' => [
+                'nullable', 'integer', 'exists:fuel_types,id',
+                function ($attribute, $value, $fail) use ($fuelGroup) {
+                    $type = FuelType::find($value);
+                    if ($type && $type->group !== $fuelGroup) {
+                        $fail("{$type->name} bukan BBM ".strtolower(FuelType::GROUPS[$fuelGroup] ?? $fuelGroup).'.');
+                    }
+                },
+            ],
+            'tank_capacity' => ['nullable', 'numeric', 'min:1', 'max:500'],
             // Pemilik – hanya dipakai bila yang mengirim admin (diabaikan untuk user biasa).
             'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)],
         ];
@@ -68,7 +91,7 @@ class VehicleRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'odometer.min' => 'Odometer tidak boleh lebih kecil dari catatan maintenance terakhir (:min km).',
+            'odometer.min' => 'Odometer tidak boleh lebih kecil dari catatan maintenance / pengisian BBM terakhir (:min km).',
         ];
     }
 
@@ -83,6 +106,9 @@ class VehicleRequest extends FormRequest
             'model_3d_url' => 'URL model 3D',
             'user_id' => 'pemilik',
             'type' => 'jenis kendaraan',
+            'fuel_group' => 'jenis bahan bakar',
+            'default_fuel_type_id' => 'BBM default',
+            'tank_capacity' => 'kapasitas tangki',
         ];
     }
 }

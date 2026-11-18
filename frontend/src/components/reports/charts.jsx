@@ -39,7 +39,7 @@ export function niceTicks(max, count = 4) {
 }
 
 /** Lebar kontainer (responsif). */
-function useWidth() {
+export function useWidth() {
   const ref = useRef(null)
   const [width, setWidth] = useState(0)
   useEffect(() => {
@@ -174,7 +174,10 @@ export function MonthlyStackedChart({ months, categories }) {
           <div className="tt-row tt-total">
             Total <span>{rupiah(months[hover.i].total)}</span>
           </div>
-          <small className="muted">{months[hover.i].count} catatan</small>
+          <small className="muted">
+            {months[hover.i].count} catatan
+            {months[hover.i].fuel_fills ? ` · ${months[hover.i].fuel_fills}× isi BBM` : ''}
+          </small>
         </div>
       )}
     </div>
@@ -184,19 +187,27 @@ export function MonthlyStackedChart({ months, categories }) {
 /**
  * Bar horizontal (besaran per entitas). Nama di kiri, nilai di ujung bar.
  * rows: [{ key, label, sub?, value, share, color }]
+ * onSelect(key) opsional: baris bisa diklik / Enter untuk melihat detail (drill-down).
  */
-export function HorizontalBars({ rows, ariaLabel }) {
+export function HorizontalBars({ rows, ariaLabel, onSelect, selectHint = 'lihat detail' }) {
   const [hover, setHover] = useState(null)
   const max = Math.max(1, ...rows.map((r) => r.value))
+  const clickable = !!onSelect
   return (
-    <div className="hbars" role="img" aria-label={ariaLabel}>
+    <div className={`hbars ${clickable ? 'clickable' : ''}`} role={clickable ? 'list' : 'img'} aria-label={ariaLabel}>
       {rows.map((r) => (
         <div
           key={r.key}
           className={`hbar ${hover === r.key ? 'hover' : ''}`}
           onMouseEnter={() => setHover(r.key)}
           onMouseLeave={() => setHover(null)}
-          title={`${r.label}: ${rupiah(r.value)} (${Math.round(r.share * 100)}%)`}
+          title={`${r.label}: ${rupiah(r.value)} (${Math.round(r.share * 100)}%)${clickable ? ` – klik untuk ${selectHint}` : ''}`}
+          {...(clickable && {
+            role: 'button',
+            tabIndex: 0,
+            onClick: () => onSelect(r.key),
+            onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(r.key) } },
+          })}
         >
           <div className="hbar-label">
             <span>{r.label}</span>

@@ -27,6 +27,8 @@ class VehicleController extends Controller
             ->when($user->isAdmin() && $request->integer('owner_id'), fn ($q) => $q->where('user_id', $request->integer('owner_id')))
             ->withCount('maintenanceRecords')
             ->withMax('maintenanceRecords', 'odometer')
+            ->withCount('fuelLogs')
+            ->withMax('fuelLogs', 'odometer')
             ->orderBy('plate_number')
             ->get();
 
@@ -46,7 +48,7 @@ class VehicleController extends Controller
     {
         Gate::authorize('view', $vehicle);
 
-        return response()->json(['data' => $vehicle->load('owner:id,name,email')->loadCount('maintenanceRecords')]);
+        return response()->json(['data' => $vehicle->load('owner:id,name,email')->loadCount(['maintenanceRecords', 'fuelLogs'])]);
     }
 
     public function update(VehicleRequest $request, Vehicle $vehicle, DueReminderService $reminders): JsonResponse

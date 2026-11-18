@@ -14,6 +14,8 @@ Aplikasi web untuk mencatat dan memantau penggantian sparepart kendaraan, dengan
 
 ## Menjalankan di localhost
 
+### Sekali saja (persiapan awal)
+
 ```bash
 # Backend
 cd backend
@@ -22,14 +24,27 @@ cp .env.example .env
 php artisan key:generate
 touch database/database.sqlite      # PowerShell: New-Item database\database.sqlite -ItemType File
 php artisan migrate --seed          # tabel + data contoh Hyundai Palisade
-php artisan serve                   # http://127.0.0.1:8000
 
-# Frontend (terminal lain)
-cd frontend
+# Frontend
+cd ../frontend
 npm install
-npm run dev                         # http://localhost:5173
 ```
 
+### Setiap kali mau menjalankan
+
+Dari folder utama proyek, satu perintah menyalakan backend **dan** frontend:
+
+```bash
+npm run dev               # buka http://localhost:5173 · Ctrl+C menghentikan semuanya
+npm run dev:schedule      # sama, plus scheduler pengingat jatuh tempo (jam 07:00)
+```
+
+- PHP dipilih otomatis: `PHP_BIN` bila diset, jika tidak PHP terbaru di `C:\laragon\bin\php`, terakhir `php` di PATH.
+  Ini menghindari PHP lain di PATH (mis. PHP 8.0 dari XAMPP) yang membuat backend gagal jalan.
+- Log ditandai `[api]` (Laravel) dan `[web]` (Vite). Bila salah satu berhenti, yang lain ikut dihentikan.
+- Bila port 8000 / 5173 sudah terpakai, script berhenti dengan pesan, bukan diam-diam memakai port lain.
+
+Cara manual (dua terminal) tetap bisa: `php artisan serve` di `backend/` dan `npm run dev` di `frontend/`.
 Vite meneruskan `/api/*` ke `127.0.0.1:8000`, jadi backend harus berjalan lebih dulu.
 
 ## Login, peran & pengguna
@@ -40,6 +55,7 @@ Seeder membuat admin development `admin@example.com` dengan password `password`
 | Aksi | Admin | User |
 |---|---|---|
 | Lihat kendaraan beserta catatan, laporan & notifikasinya | ✅ semua | ✅ milik sendiri |
+| Laporan biaya per pemilik (filter pemilik, klik grafik untuk drill-down pemilik → kendaraan) | ✅ | ❌ |
 | Tambah/edit/hapus kendaraan | ✅ semua, bisa pindah pemilik | ✅ milik sendiri |
 | Tambah/edit catatan maintenance, upload/hapus foto nota | ✅ | ✅ kendaraan sendiri |
 | Hapus catatan maintenance | ✅ | ❌ |
@@ -66,15 +82,18 @@ Login dibatasi 5 percobaan per menit per email + IP.
 ## Automated test
 
 ```bash
-# Backend (PHPUnit) – 84 test: usia pakai, API CRUD, lampiran, login, peran & pengguna, kepemilikan, jenis kendaraan,
-# pengingat & anti-spam, laporan biaya, pesan Bahasa Indonesia
+# Backend (PHPUnit) – 115 test: usia pakai, API CRUD, lampiran, login, peran & pengguna, kepemilikan, jenis kendaraan,
+# pengingat & anti-spam, laporan biaya (termasuk per pemilik), bahan bakar & konsumsi, pesan Bahasa Indonesia
 cd backend
 php artisan test
 
-# Frontend (Vitest) – 28 test: format tanggal/angka, skala grafik, pesan error
+# Frontend (Vitest) – 35 test: format tanggal/angka, skala grafik, pesan error, hitung otomatis BBM
 cd frontend
 npm test
 ```
+
+Di Windows, jalankan `npm test` dari folder dengan huruf drive kapital (`C:\…`). Bila terminal
+berada di `c:\…` (huruf kecil), Vitest bisa gagal dengan *Cannot read properties of undefined (reading 'config')*.
 
 Test backend selalu memakai database **di memori** (`phpunit.xml`), dan `tests/TestCase.php`
 menghentikan test bila tersambung ke database lain, sehingga data asli tidak pernah tersentuh.
@@ -100,6 +119,33 @@ Jadwal harian membutuhkan scheduler Laravel yang berjalan:
 
 Anti-spam: notifikasi dibuat saat part baru masuk status *Segera*/*Lewat jadwal*; part yang tetap
 lewat jadwal diingatkan ulang tiap 7 hari; status direset setelah part diganti.
+Part yang belum pernah dicatat (status *Belum ada data*) tidak memicu notifikasi. Lonceng hanya menampilkan
+notifikasi kendaraan yang masih ada dan boleh dilihat user; menghapus kendaraan ikut menghapus notifikasinya.
+
+## Bahan bakar
+
+Menu **Bahan Bakar** mencatat setiap pengisian (tanggal, odometer, jenis BBM, liter / harga / total,
+isi penuh atau sebagian). Cukup isi dua dari liter, harga per liter, dan total bayar; yang ketiga dihitung.
+
+Konsumsi (km/L) memakai metode **tangki penuh ke tangki penuh**: jarak antara dua kali isi penuh dibagi
+liter yang diisi sesudah isi penuh pertama, termasuk isi sebagian di antaranya. Rata-rata keseluruhan
+adalah total km ÷ total liter dari segmen yang valid. Centang *Ada pengisian yang tidak dicatat* untuk
+memutus perhitungan bila ada pengisian yang lupa dicatat. Hasilnya tidak disimpan, melainkan dihitung
+ulang setiap kali ditampilkan, jadi mengedit atau menghapus catatan lama langsung tercermin
+(`app/Services/FuelEconomyService.php`).
+
+- Master **Jenis BBM** (menu Master Data, ubah khusus admin) berisi kelompok bensin / diesel. Kendaraan
+  bensin hanya bisa diisi jenis bensin, dst. Jenis yang tidak dijual lagi cukup dinonaktifkan.
+- Di data kendaraan: jenis bahan bakar, BBM default (otomatis terpilih), dan kapasitas tangki
+  (untuk peringatan salah input liter).
+- Odometer pengisian ikut menaikkan odometer kendaraan, sehingga pengingat servis berbasis km ikut akurat.
+- Hak akses sama dengan catatan maintenance; pemilik kendaraan juga boleh menghapus catatan BBM-nya.
+- Halaman Bahan Bakar punya grafik tren km/L per isi penuh (dengan garis rata-rata), dan Dashboard
+  punya kartu **Konsumsi BBM** (klik untuk membuka halaman Bahan Bakar).
+- **Laporan Biaya** menggabungkan biaya BBM sebagai kategori *Bahan Bakar* (total, per bulan, per
+  kategori, per kendaraan + km/L, per pemilik), plus bagian BBM per jenis dan rincian pengisian.
+  Centang *Termasuk BBM* bisa dimatikan untuk melihat biaya maintenance saja. Excel ikut memuat
+  sheet **BBM** dan rincian maintenance vs BBM di Ringkasan (Total biaya tetap di sel B8).
 
 ## Jenis kendaraan
 

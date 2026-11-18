@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\MaintenanceRecord;
 use App\Models\Part;
+use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -17,14 +18,20 @@ class CostReportTest extends TestCase
 
     private Vehicle $b;
 
+    private User $budi;
+
+    private User $sari;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->travelTo('2026-11-17 10:00:00');
         $this->actingAsAdmin(); // admin melihat semua kendaraan; laporan per pemilik diuji di VehicleOwnershipTest
 
-        $this->a = Vehicle::factory()->create(['plate_number' => 'B 1 AAA']);
-        $this->b = Vehicle::factory()->create(['plate_number' => 'B 2 BBB']);
+        $this->budi = User::factory()->create(['name' => 'Budi Santoso', 'email' => 'budi@example.com']);
+        $this->sari = User::factory()->create(['name' => 'Sari', 'email' => 'sari@example.com']);
+        $this->a = Vehicle::factory()->for($this->budi, 'owner')->create(['plate_number' => 'B 1 AAA']);
+        $this->b = Vehicle::factory()->for($this->sari, 'owner')->create(['plate_number' => 'B 2 BBB']);
         $mesin = Part::factory()->create(['name' => 'Oli', 'category' => 'Mesin']);
         $rem = Part::factory()->create(['name' => 'Kampas', 'category' => 'Rem']);
         Part::factory()->create(['category' => 'Body']); // kategori tanpa biaya
@@ -54,7 +61,7 @@ class CostReportTest extends TestCase
 
         $this->assertSame(['Rem' => 2_000_000, 'Mesin' => 1_500_000], collect($d['by_category'])->pluck('total', 'category')->all());
         $this->assertSame(['B 1 AAA' => 3_000_000, 'B 2 BBB' => 500_000], collect($d['by_vehicle'])->pluck('total', 'plate_number')->all());
-        $this->assertSame(['Body', 'Mesin', 'Rem'], $d['categories'], 'Urutan kategori tetap (alfabetis) untuk warna grafik');
+        $this->assertSame(['Body', 'Mesin', 'Rem', 'Bahan Bakar'], $d['categories'], 'Urutan kategori tetap (alfabetis), Bahan Bakar selalu terakhir');
     }
 
     #[Test]
@@ -108,7 +115,92 @@ class CostReportTest extends TestCase
         $this->assertStringContainsString('laporan-biaya_2026-01-01_2026-03-31_B1AAA.xlsx', $res->headers->get('Content-Disposition'));
 
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($res->baseResponse->getFile()->getPathname());
-        $this->assertSame(['Ringkasan', 'Per Bulan', 'Per Part', 'Detail'], $book->getSheetNames());
-        $this->assertSame(3_000_000, (int) $book->getSheetByName('Ringkasan')->getCell('B7')->getValue());
+        $this->assertSame(['Ringkasan', 'Per Bulan', 'Per Part', 'Detail', 'BBM'], $book->getSheetNames());
+        $this->assertSame(3_000_000, (int) $book->getSheetByName('Ringkasan')->getCell('B8')->getValue());
+    }
+
+    #[Test]
+    public function admin_melihat_biaya_per_pemilik(): void
+    {
+        // Kendaraan kedua milik Budi → Budi punya 2 kendaraan, termahal tetap B 1 AAA.
+        $c = Vehicle::factory()->for($this->budi, 'owner')->create(['plate_number' => 'B 3 CCC']);
+        MaintenanceRecord::factory()->for($c)->for(Part::first())->create(['service_date' => '2026-02-01', 'cost' => 250_000]);
+
+        $d = $this->report('from=2026-01-01&to=2026-03-31');
+
+        $this->assertTrue($d['with_owners']);
+        $this->assertSame(['Budi Santoso' => 3_250_000, 'Sari' => 500_000], collect($d['by_owner'])->pluck('total', 'name')->all());
+        $budi = collect($d['by_owner'])->firstWhere('owner_id', $this->budi->id);
+        $this->assertSame(2, $budi['vehicles']);
+        $this->assertSame(3, $budi['count']);
+        $this->assertSame('B 1 AAA', $budi['top_vehicle']);
+        $this->assertSame('budi@example.com', $budi['email']);
+
+        $this->assertSame('Sari', collect($d['by_vehicle'])->firstWhere('plate_number', 'B 2 BBB')['owner']);
+        $this->assertSame('Sari', collect($d['records'])->firstWhere('plate_number', 'B 2 BBB')['owner']);
+    }
+
+    #[Test]
+    public function filter_pemilik(): void
+    {
+        $d = $this->report("from=2026-01-01&to=2026-03-31&owner_id={$this->budi->id}");
+
+        $this->assertSame(3_000_000, $d['summary']['total']);
+        $this->assertSame(['B 1 AAA'], collect($d['by_vehicle'])->pluck('plate_number')->all());
+        $this->assertSame('Budi Santoso', $d['filter']['owner']['name']);
+
+        // Pemilik + kendaraannya sendiri → boleh.
+        $d = $this->report("from=2026-01-01&to=2026-03-31&owner_id={$this->budi->id}&vehicle_id={$this->a->id}");
+        $this->assertSame(3_000_000, $d['summary']['total']);
+    }
+
+    #[Test]
+    public function filter_pemilik_dengan_kendaraan_orang_lain_ditolak(): void
+    {
+        $this->getJson("/api/reports/costs?owner_id={$this->budi->id}&vehicle_id={$this->b->id}")
+            ->assertStatus(422)
+            ->assertJsonPath('errors.vehicle_id.0', 'Kendaraan yang dipilih bukan milik pemilik tersebut.');
+
+        $this->getJson('/api/reports/costs?owner_id=99999')
+            ->assertStatus(422)
+            ->assertJsonPath('errors.owner_id.0', 'Pemilik yang dipilih tidak ditemukan.');
+    }
+
+    #[Test]
+    public function user_biasa_tidak_bisa_memakai_filter_pemilik_dan_tidak_melihat_data_pemilik(): void
+    {
+        $this->actingAsUser($this->budi);
+
+        $this->getJson("/api/reports/costs?owner_id={$this->sari->id}")
+            ->assertStatus(422)
+            ->assertJsonPath('errors.owner_id.0', 'Pemilik tidak diizinkan.');
+
+        $d = $this->report('from=2026-01-01&to=2026-03-31');
+        $this->assertFalse($d['with_owners']);
+        $this->assertNull($d['by_owner']);
+        $this->assertArrayNotHasKey('owner', $d['by_vehicle'][0]);
+        $this->assertNull($d['records'][0]['owner']);
+        $this->assertSame(3_000_000, $d['summary']['total']);
+    }
+
+    #[Test]
+    public function export_excel_per_pemilik(): void
+    {
+        $res = $this->get("/api/reports/costs/export?from=2026-01-01&to=2026-03-31&owner_id={$this->budi->id}", ['Accept' => 'application/json'])
+            ->assertOk();
+        $this->assertStringContainsString('laporan-biaya_2026-01-01_2026-03-31_budi-santoso.xlsx', $res->headers->get('Content-Disposition'));
+
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($res->baseResponse->getFile()->getPathname());
+        $ringkasan = $book->getSheetByName('Ringkasan');
+        $this->assertSame('Budi Santoso (budi@example.com)', $ringkasan->getCell('B4')->getValue());
+        $this->assertSame(3_000_000, (int) $ringkasan->getCell('B8')->getValue());
+        $this->assertSame('Pemilik', $book->getSheetByName('Detail')->getCell('C1')->getValue());
+        $this->assertSame('Budi Santoso', $book->getSheetByName('Detail')->getCell('C2')->getValue());
+
+        // Tanpa filter pemilik, ringkasan memuat tabel "Biaya per pemilik".
+        $res = $this->get('/api/reports/costs/export?from=2026-01-01&to=2026-03-31', ['Accept' => 'application/json'])->assertOk();
+        $ringkasan = \PhpOffice\PhpSpreadsheet\IOFactory::load($res->baseResponse->getFile()->getPathname())->getSheetByName('Ringkasan');
+        $this->assertSame('Biaya per pemilik', $ringkasan->getCell('A16')->getValue());
+        $this->assertSame('Budi Santoso', $ringkasan->getCell('A18')->getValue());
     }
 }

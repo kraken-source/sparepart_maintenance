@@ -52,6 +52,17 @@ export const api = {
   updateRecord: (id, payload) => http.put(`/maintenance-records/${id}`, payload).then((r) => r.data.data),
   deleteRecord: (id) => http.delete(`/maintenance-records/${id}`),
 
+  // --- Bahan bakar ---
+  fuelTypes: () => http.get('/fuel-types').then((r) => r.data.data),
+  createFuelType: (payload) => http.post('/fuel-types', payload).then((r) => r.data.data),
+  updateFuelType: (id, payload) => http.put(`/fuel-types/${id}`, payload).then((r) => r.data.data),
+  deleteFuelType: (id) => http.delete(`/fuel-types/${id}`),
+  /** Riwayat pengisian + ringkasan konsumsi satu kendaraan. */
+  fuelLogs: (vehicleId) => http.get('/fuel-logs', { params: { vehicle_id: vehicleId } }).then((r) => r.data.data),
+  createFuelLog: (payload) => http.post('/fuel-logs', payload).then((r) => r.data.data),
+  updateFuelLog: (id, payload) => http.put(`/fuel-logs/${id}`, payload).then((r) => r.data.data),
+  deleteFuelLog: (id) => http.delete(`/fuel-logs/${id}`),
+
   // --- Laporan biaya ---
   costReport: (params) => http.get('/reports/costs', { params }).then((r) => r.data.data),
   /** Unduh file Excel: ambil sebagai blob (perlu token) lalu picu download di browser. */

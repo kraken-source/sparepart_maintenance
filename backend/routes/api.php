@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\FuelLogController;
+use App\Http\Controllers\Api\FuelTypeController;
 use App\Http\Controllers\Api\MaintenanceAttachmentController;
 use App\Http\Controllers\Api\MaintenanceRecordController;
 use App\Http\Controllers\Api\NotificationController;
@@ -29,6 +31,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Catatan maintenance: semua boleh lihat, tambah, ubah (hapus khusus admin, di bawah)
     Route::apiResource('maintenance-records', MaintenanceRecordController::class)->except('destroy');
 
+    // Bahan bakar: pemilik kendaraan (dan admin) mencatat pengisian; konsumsi dihitung otomatis
+    Route::get('fuel-types', [FuelTypeController::class, 'index']);
+    Route::apiResource('fuel-logs', FuelLogController::class)->except('show');
+
     // Lampiran foto nota / bukti servis
     Route::post('maintenance-records/{maintenance_record}/attachments', [MaintenanceAttachmentController::class, 'store']);
     Route::get('attachments/{attachment}', [MaintenanceAttachmentController::class, 'show']);
@@ -47,6 +53,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // ---------------- Khusus admin ----------------
     Route::middleware('can:admin')->group(function () {
         Route::apiResource('parts', PartController::class)->only(['store', 'update', 'destroy']);
+        Route::apiResource('fuel-types', FuelTypeController::class)->only(['store', 'update', 'destroy']);
         Route::delete('maintenance-records/{maintenance_record}', [MaintenanceRecordController::class, 'destroy']);
 
         Route::apiResource('users', UserController::class)->except('show');

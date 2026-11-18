@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Vehicle;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use App\Services\DueReminderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,27 +14,36 @@ use Illuminate\Http\Request;
  */
 class NotificationController extends Controller
 {
-    /** GET /api/notifications → 30 terbaru + jumlah belum dibaca */
-    public function index(Request $request): JsonResponse
+    /**
+     * Notifikasi user yang kendaraannya masih ada DAN masih boleh dilihat user tsb.
+     * Kendaraan yang sudah dihapus atau dipindah ke pemilik lain tidak lagi muncul di lonceng.
+     */
+    private function visible(Request $request): MorphMany
     {
         $user = $request->user();
 
+        return $user->notifications()->whereIn('data->vehicle_id', Vehicle::visibleTo($user)->select('id'));
+    }
+
+    /** GET /api/notifications → 30 terbaru + jumlah belum dibaca */
+    public function index(Request $request): JsonResponse
+    {
         return response()->json([
-            'data' => $user->notifications()->latest()->limit(30)->get()
+            'data' => $this->visible($request)->latest()->limit(30)->get()
                 ->map(fn ($n) => [
                     'id' => $n->id,
                     'data' => $n->data,
                     'read_at' => $n->read_at,
                     'created_at' => $n->created_at,
                 ]),
-            'unread_count' => $user->unreadNotifications()->count(),
+            'unread_count' => $this->visible($request)->whereNull('read_at')->count(),
         ]);
     }
 
     /** POST /api/notifications/{id}/read */
     public function markRead(Request $request, string $id): JsonResponse
     {
-        $request->user()->notifications()->findOrFail($id)->markAsRead();
+        $this->visible($request)->findOrFail($id)->markAsRead();
 
         return response()->json(null, 204);
     }

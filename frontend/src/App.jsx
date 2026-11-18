@@ -17,6 +17,8 @@ import VehiclesPage from './components/VehiclesPage'
 import PartsPage from './components/PartsPage'
 import ReportsPage from './components/reports/ReportsPage'
 import UsersPage from './components/users/UsersPage'
+import FuelPage from './components/fuel/FuelPage'
+import FuelTypesPage from './components/fuel/FuelTypesPage'
 
 const MENU = [
   {
@@ -24,6 +26,7 @@ const MENU = [
     items: [
       { key: 'dashboard', label: 'Dashboard 3D', perVehicle: true },
       { key: 'records', label: 'Catatan Maintenance', perVehicle: true },
+      { key: 'fuel', label: 'Bahan Bakar', perVehicle: true },
       { key: 'reports', label: 'Laporan Biaya' },
     ],
   },
@@ -32,6 +35,7 @@ const MENU = [
     items: [
       { key: 'vehicles', label: 'Kendaraan' },
       { key: 'parts', label: 'Part' },
+      { key: 'fuelTypes', label: 'Jenis BBM' },
     ],
   },
   {
@@ -145,7 +149,7 @@ function MainApp() {
         {activePage === 'dashboard' && vehicle && (
           <main className="dashboard">
             <section className="dash-main">
-              <DashboardStats vehicle={vehicle} parts={parts.data} />
+              <DashboardStats vehicle={vehicle} parts={parts.data} onOpenFuel={() => setPage('fuel')} />
               <Viewer3DBoundary>
                 <Suspense fallback={<div className="viewer viewer-loading"><span>Memuat model 3D…</span></div>}>
                   <VehicleViewer vehicle={vehicle} parts={parts.data} />
@@ -156,6 +160,8 @@ function MainApp() {
           </main>
         )}
         {activePage === 'records' && vehicle && <RecordsTable vehicle={vehicle} />}
+        {activePage === 'fuel' && vehicle && <FuelPage key={vehicle.id} vehicle={vehicle} />}
+        {activePage === 'fuelTypes' && <FuelTypesPage />}
         {activePage === 'vehicles' && (
           <VehiclesPage
             vehicles={vehicles.data}

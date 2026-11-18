@@ -63,7 +63,7 @@ class VehicleApiTest extends TestCase
 
         $this->putJson("/api/vehicles/{$v->id}", $this->payload(['plate_number' => $v->plate_number, 'odometer' => 47000]))
             ->assertStatus(422)
-            ->assertJsonPath('errors.odometer.0', 'Odometer tidak boleh lebih kecil dari catatan maintenance terakhir (48000 km).');
+            ->assertJsonPath('errors.odometer.0', 'Odometer tidak boleh lebih kecil dari catatan maintenance / pengisian BBM terakhir (48000 km).');
     }
 
     #[Test]

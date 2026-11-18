@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { api, errorMessage } from '../../api'
 import { ACTIONS, km, tanggal, vehicleLabel } from '../../format'
 import { useIsAdmin } from '../../auth'
+import { FUEL_CATEGORY, kmPerLiter, liter } from '../../fuel'
 import { HorizontalBars, MonthlyStackedChart, categoryColor, rupiah, rupiahShort } from './charts'
 
 const iso = (d) => d.toLocaleDateString('sv-SE')
@@ -28,11 +29,27 @@ export default function ReportsPage({ vehicles }) {
   const isAdmin = useIsAdmin()
   const [preset, setPreset] = useState('12m')
   const [range, setRange] = useState(() => PRESETS['12m'][1]())
+  const [ownerId, setOwnerId] = useState('')
   const [vehicleId, setVehicleId] = useState('')
+  const [includeFuel, setIncludeFuel] = useState(true)
   const [showTable, setShowTable] = useState(false)
   const [printedAt] = useState(() => new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }))
 
-  const params = { ...range, vehicle_id: vehicleId || undefined }
+  // Filter pemilik khusus admin; daftar kendaraan mengikuti pemilik yang dipilih.
+  const users = useQuery({ queryKey: ['users'], queryFn: api.users, enabled: isAdmin })
+  const ownerVehicles = ownerId ? vehicles?.filter((v) => v.user_id === Number(ownerId)) : vehicles
+  const chooseOwner = (id) => {
+    setOwnerId(id ? String(id) : '')
+    // Kendaraan terpilih yang bukan milik pemilik baru → kosongkan.
+    if (id && vehicleId && vehicles?.find((v) => v.id === Number(vehicleId))?.user_id !== Number(id)) setVehicleId('')
+  }
+
+  const params = {
+    ...range,
+    owner_id: (isAdmin && ownerId) || undefined,
+    vehicle_id: vehicleId || undefined,
+    include_fuel: includeFuel ? undefined : 0, // default server: BBM disertakan
+  }
   const report = useQuery({
     queryKey: ['report', params],
     queryFn: () => api.costReport(params),
@@ -48,6 +65,13 @@ export default function ReportsPage({ vehicles }) {
 
   const d = report.data
   const vehicleName = vehicleId ? vehicles?.find((v) => v.id === Number(vehicleId)) : null
+  const ownerName = ownerId ? users.data?.find((u) => u.id === Number(ownerId))?.name : null
+  const scopeLabel = vehicleName ? vehicleName.plate_number : ownerName ? `kendaraan ${ownerName}` : 'semua kendaraan'
+  // Kolom/teks pemilik hanya berguna untuk admin selama belum difilter ke satu pemilik.
+  const showOwner = !!d?.with_owners && !ownerId
+  const fuel = d?.filter.include_fuel ? d.fuel : null
+  const fuelColor = d ? categoryColor(d.categories, FUEL_CATEGORY) : null
+  const isEmpty = d && d.summary.count === 0 && !(fuel?.fills > 0)
 
   return (
     <section className="report">
@@ -63,25 +87,54 @@ export default function ReportsPage({ vehicles }) {
             <input type="date" value={range.to} min={range.from} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} aria-label="Sampai tanggal" />
           </>
         )}
+        {isAdmin && (
+          <select value={ownerId} onChange={(e) => chooseOwner(e.target.value)} aria-label="Pemilik">
+            <option value="">Semua pemilik</option>
+            {users.data?.map((u) => <option key={u.id} value={u.id}>{u.name}{u.is_active ? '' : ' (nonaktif)'}</option>)}
+          </select>
+        )}
         <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} aria-label="Kendaraan">
-          <option value="">Semua kendaraan</option>
-          {vehicles?.map((v) => <option key={v.id} value={v.id}>{vehicleLabel(v, { withOwner: isAdmin })}</option>)}
+          <option value="">{ownerId ? 'Semua kendaraan pemilik ini' : 'Semua kendaraan'}</option>
+          {ownerVehicles?.map((v) => <option key={v.id} value={v.id}>{vehicleLabel(v, { withOwner: isAdmin && !ownerId })}</option>)}
         </select>
+        <label className="toggle-check" title="Gabungkan biaya bahan bakar ke total, per bulan, per kategori, dan per kendaraan">
+          <input type="checkbox" checked={includeFuel} onChange={(e) => setIncludeFuel(e.target.checked)} />
+          Termasuk BBM
+        </label>
         <span className="spacer" />
         <button onClick={() => exportXlsx.mutate()} disabled={!d || exportXlsx.isPending}>
           {exportXlsx.isPending ? 'Menyiapkan…' : '⬇ Export Excel'}
         </button>
         <button onClick={() => window.print()} disabled={!d}>🖨 Cetak / PDF</button>
       </div>
+      {/* Filter aktif hasil klik grafik → mudah dilepas satu per satu */}
+      {(ownerId || vehicleId) && (
+        <div className="filter-chips no-print">
+          <span className="muted">Menampilkan:</span>
+          {ownerId && (
+            <span className="filter-chip">
+              Pemilik: <strong>{ownerName ?? '…'}</strong>
+              <button title="Hapus filter pemilik" aria-label="Hapus filter pemilik" onClick={() => { setOwnerId(''); setVehicleId('') }}>×</button>
+            </span>
+          )}
+          {vehicleId && (
+            <span className="filter-chip">
+              Kendaraan: <strong>{vehicleName?.plate_number ?? '…'}</strong>
+              <button title="Hapus filter kendaraan" aria-label="Hapus filter kendaraan" onClick={() => setVehicleId('')}>×</button>
+            </span>
+          )}
+        </div>
+      )}
       {exportXlsx.isError && <p className="error no-print">Gagal export: {errorMessage(exportXlsx.error)}</p>}
       {report.isError && <p className="error">Gagal memuat laporan: {errorMessage(report.error)}</p>}
 
       {/* Judul khusus cetak */}
       <div className="print-only print-head">
-        <h1>Laporan Biaya Maintenance</h1>
+        <h1>{d?.filter.include_fuel ? 'Laporan Biaya Kendaraan (Maintenance + BBM)' : 'Laporan Biaya Maintenance'}</h1>
         {d && (
           <p>
             Periode {tanggal(d.filter.from)} – {tanggal(d.filter.to)} ·{' '}
+            {d.filter.owner && `Pemilik ${d.filter.owner.name} · `}
             {d.filter.vehicle ? `${d.filter.vehicle.plate_number} – ${d.filter.vehicle.brand} ${d.filter.vehicle.model}` : 'Semua kendaraan'} ·
             dicetak {printedAt}
           </p>
@@ -93,8 +146,19 @@ export default function ReportsPage({ vehicles }) {
       {d && (
         <div className={`report-body ${report.isFetching ? 'refreshing' : ''}`}>
           <div className="report-tiles">
-            <Tile label="Total biaya" value={rupiah(d.summary.total)} sub={`${tanggal(d.filter.from)} – ${tanggal(d.filter.to)}`} hero />
-            <Tile label="Jumlah catatan" value={d.summary.count.toLocaleString('id-ID')} sub={vehicleName ? vehicleName.plate_number : 'semua kendaraan'} />
+            <Tile
+              label="Total biaya"
+              value={rupiah(d.summary.total)}
+              sub={fuel
+                ? `Maintenance ${rupiahShort(d.summary.maintenance_total)} · BBM ${rupiahShort(d.summary.fuel_total)}`
+                : `${tanggal(d.filter.from)} – ${tanggal(d.filter.to)}`}
+              hero
+            />
+            <Tile
+              label="Jumlah catatan"
+              value={d.summary.count.toLocaleString('id-ID')}
+              sub={fuel ? `+ ${d.summary.fuel_fills} pengisian BBM · ${scopeLabel}` : scopeLabel}
+            />
             <Tile label="Rata-rata per bulan" value={rupiahShort(d.summary.avg_per_month)} sub={`dari ${d.summary.months} bulan`} />
             <Tile
               label="Kategori terbesar"
@@ -104,8 +168,10 @@ export default function ReportsPage({ vehicles }) {
             />
           </div>
 
-          {d.summary.count === 0 ? (
-            <div className="card empty-report">Tidak ada catatan maintenance pada periode ini.</div>
+          {isEmpty ? (
+            <div className="card empty-report">
+              Tidak ada catatan {fuel ? 'maintenance maupun pengisian BBM' : 'maintenance'} pada periode ini.
+            </div>
           ) : (
             <>
               <div className="card">
@@ -122,24 +188,50 @@ export default function ReportsPage({ vehicles }) {
                 </div>
               </div>
 
+              {showOwner && !vehicleId && d.by_owner?.length > 0 && (
+                <div className="card">
+                  <div className="card-head">
+                    <h3>Biaya per pemilik</h3>
+                    <span className="muted card-hint no-print">Klik nama untuk melihat detail</span>
+                  </div>
+                  <HorizontalBars
+                    ariaLabel="Biaya per pemilik"
+                    selectHint="melihat kendaraan pemilik ini"
+                    onSelect={chooseOwner}
+                    rows={d.by_owner.map((o) => ({
+                      key: o.owner_id, label: o.name,
+                      sub: `${o.vehicles} kendaraan · ${o.count} catatan${fuel ? ` · ${o.fuel_fills}× isi BBM` : ''} · termahal ${o.top_vehicle}`,
+                      value: o.total, share: o.share, color: 'var(--seq-1)',
+                    }))}
+                  />
+                </div>
+              )}
+
               <div className="report-grid">
                 <div className="card">
                   <h3>Biaya per kategori</h3>
                   <HorizontalBars
                     ariaLabel="Biaya per kategori"
                     rows={d.by_category.map((c) => ({
-                      key: c.category, label: c.category, sub: `${c.count} catatan`,
+                      key: c.category, label: c.category,
+                      sub: c.category === FUEL_CATEGORY ? `${c.count} pengisian` : `${c.count} catatan`,
                       value: c.total, share: c.share, color: categoryColor(d.categories, c.category),
                     }))}
                   />
                 </div>
                 {!vehicleId && (
                   <div className="card">
-                    <h3>Biaya per kendaraan</h3>
+                    <div className="card-head">
+                      <h3>Biaya per kendaraan</h3>
+                      <span className="muted card-hint no-print">Klik untuk detail</span>
+                    </div>
                     <HorizontalBars
                       ariaLabel="Biaya per kendaraan"
+                      selectHint="melihat detail kendaraan ini"
+                      onSelect={(id) => setVehicleId(String(id))}
                       rows={d.by_vehicle.map((v) => ({
-                        key: v.vehicle_id, label: v.plate_number, sub: v.name,
+                        key: v.vehicle_id, label: v.plate_number,
+                        sub: [v.name, showOwner && v.owner, fuel && v.km_per_liter != null && kmPerLiter(v.km_per_liter)].filter(Boolean).join(' · '),
                         value: v.total, share: v.share, color: 'var(--seq-1)',
                       }))}
                     />
@@ -147,7 +239,25 @@ export default function ReportsPage({ vehicles }) {
                 )}
               </div>
 
-              <div className="card">
+              {fuel?.fills > 0 && (
+                <div className="card">
+                  <div className="card-head">
+                    <h3>Bahan bakar</h3>
+                    <span className="muted card-hint">
+                      {liter(fuel.liters)} · {fuel.fills}× isi · rata-rata {rupiah(fuel.avg_price_per_liter)}/L
+                    </span>
+                  </div>
+                  <HorizontalBars
+                    ariaLabel="Biaya bahan bakar per jenis"
+                    rows={fuel.by_type.map((t) => ({
+                      key: t.fuel_type_id, label: t.name, sub: `${liter(t.liters)} · ${t.fills}× isi`,
+                      value: t.total, share: t.share, color: fuelColor,
+                    }))}
+                  />
+                </div>
+              )}
+
+              {d.by_part.length > 0 && <div className="card">
                 <h3>10 part dengan biaya terbesar</h3>
                 <table className="report-table">
                   <thead>
@@ -166,22 +276,66 @@ export default function ReportsPage({ vehicles }) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </div>}
 
-              <details className="card details-records" open={false}>
-                <summary>Rincian {d.records.length} catatan</summary>
-                <RecordsTable records={d.records} showVehicle={!vehicleId} />
-              </details>
-              {/* versi cetak: rincian selalu tampil */}
-              <div className="card print-only">
-                <h3>Rincian catatan</h3>
-                <RecordsTable records={d.records} showVehicle={!vehicleId} />
-              </div>
+              {d.records.length > 0 && (
+                <>
+                  <details className="card details-records" open={false}>
+                    <summary>Rincian {d.records.length} catatan maintenance</summary>
+                    <RecordsTable records={d.records} showVehicle={!vehicleId} showOwner={showOwner && !vehicleId} />
+                  </details>
+                  {/* versi cetak: rincian selalu tampil */}
+                  <div className="card print-only">
+                    <h3>Rincian catatan maintenance</h3>
+                    <RecordsTable records={d.records} showVehicle={!vehicleId} showOwner={showOwner && !vehicleId} />
+                  </div>
+                </>
+              )}
+              {fuel?.records.length > 0 && (
+                <>
+                  <details className="card details-records" open={false}>
+                    <summary>Rincian {fuel.records.length} pengisian BBM</summary>
+                    <FuelRecordsTable records={fuel.records} showVehicle={!vehicleId} showOwner={showOwner && !vehicleId} />
+                  </details>
+                  <div className="card print-only">
+                    <h3>Rincian pengisian BBM</h3>
+                    <FuelRecordsTable records={fuel.records} showVehicle={!vehicleId} showOwner={showOwner && !vehicleId} />
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
       )}
     </section>
+  )
+}
+
+function FuelRecordsTable({ records, showVehicle, showOwner }) {
+  return (
+    <table className="report-table compact">
+      <thead>
+        <tr>
+          <th>Tanggal</th>{showVehicle && <th>Plat</th>}{showOwner && <th>Pemilik</th>}<th>Jenis BBM</th>
+          <th className="num">Odometer</th><th className="num">Liter</th><th className="num">Harga/L</th><th>Isi</th><th className="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {records.map((r) => (
+          <tr key={r.id}>
+            <td>{tanggal(r.filled_on)}</td>
+            {showVehicle && <td>{r.plate_number}</td>}
+            {showOwner && <td>{r.owner || '-'}</td>}
+            <td>{r.fuel_type}</td>
+            <td className="num">{km(r.odometer)}</td>
+            <td className="num">{liter(r.liters)}</td>
+            <td className="num">{rupiah(r.price_per_liter)}</td>
+            <td>{r.is_full ? 'Penuh' : 'Sebagian'}</td>
+            <td className="num">{rupiah(r.total_cost)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
@@ -231,12 +385,12 @@ function MonthlyTable({ d }) {
   )
 }
 
-function RecordsTable({ records, showVehicle }) {
+function RecordsTable({ records, showVehicle, showOwner }) {
   return (
     <table className="report-table compact">
       <thead>
         <tr>
-          <th>Tanggal</th>{showVehicle && <th>Plat</th>}<th>Part</th><th>Tindakan</th>
+          <th>Tanggal</th>{showVehicle && <th>Plat</th>}{showOwner && <th>Pemilik</th>}<th>Part</th><th>Tindakan</th>
           <th className="num">Odometer</th><th>Merek</th><th>Bengkel</th><th className="num">Biaya</th>
         </tr>
       </thead>
@@ -245,6 +399,7 @@ function RecordsTable({ records, showVehicle }) {
           <tr key={r.id}>
             <td>{tanggal(r.service_date)}</td>
             {showVehicle && <td>{r.plate_number}</td>}
+            {showOwner && <td>{r.owner || '-'}</td>}
             <td>{r.part}</td>
             <td>{ACTIONS[r.action]}</td>
             <td className="num">{km(r.odometer)}</td>
